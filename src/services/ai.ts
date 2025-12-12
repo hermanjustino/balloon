@@ -1,0 +1,117 @@
+import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "./firebase";
+import { AnalysisResult } from "../types";
+
+/* 
+  -----------------------------------------------------------------------
+  AI SERVICE
+  Handles Gemini API interaction.
+  -----------------------------------------------------------------------
+*/
+
+export const AIService = {
+    analyzeTranscript: async (transcript: string, episodeNumber?: string, videoUrl?: string): Promise<AnalysisResult> => {
+        // API KEY MUST be import.meta.env.VITE_API_KEY. 
+        // If you are developing locally, ensure your environment is set up.
+        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+
+        // 1. Generate ID early for ID consistency across collections
+        const id = crypto.randomUUID();
+
+        const schema: Schema = {
+            type: Type.OBJECT,
+            properties: {
+                episodeTitle: { type: Type.STRING, description: "A short catchy title for this episode." },
+                matchRate: { type: Type.NUMBER, description: "Percentage of couples who matched (0-100)" },
+                participantCount: { type: Type.NUMBER, description: "Total number of participants" },
+                malePercentage: { type: Type.NUMBER, description: "Percentage of male participants (0-100)" },
+                femalePercentage: { type: Type.NUMBER, description: "Percentage of female participants (0-100)" },
+                matchesCount: { type: Type.NUMBER, description: "Number of matches formed" },
+                sentiment: { type: Type.STRING, description: "Overall sentiment: Positive, Negative, Mixed, or Neutral" },
+                avgAge: { type: Type.NUMBER, description: "Average estimated age" },
+                couples: {
+                    type: Type.ARRAY,
+                    description: "List of couples who successfully matched at the end.",
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            person1: { type: Type.STRING, description: "Name of the person from the Lineup" },
+                            person2: { type: Type.STRING, description: "Name of the Contestant they matched with" }
+                        },
+                        required: ["person1", "person2"]
+                    }
+                },
+                contestants: {
+                    type: Type.ARRAY,
+                    description: "List of every person mentioned. CRITICAL: Distinguish between 'Lineup' (balloon holders) and 'Contestant' (person entering).",
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            name: { type: Type.STRING, description: "Name of the person" },
+                            age: { type: Type.STRING, description: "Age (e.g. '24', 'Unknown')" },
+                            location: { type: Type.STRING, description: "City/State" },
+                            job: { type: Type.STRING, description: "Job title" },
+                            role: { type: Type.STRING, description: "MUST be either 'Lineup' (holding balloon) or 'Contestant' (walking in to find match)." },
+                            outcome: { type: Type.STRING, description: "Short result: 'Matched', 'Popped', 'Eliminated', 'Walked Away'" }
+                        },
+                        required: ["name", "age", "location", "role", "outcome"]
+                    }
+                }
+            },
+            required: ["episodeTitle", "matchRate", "participantCount", "malePercentage", "femalePercentage", "matchesCount", "sentiment", "avgAge", "couples", "contestants"]
+        };
+
+        const epContext = episodeNumber ? `This is Episode ${episodeNumber}.` : "";
+
+        // 2. Perform AI Analysis
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Analyze the following transcript from the dating show "Pop the Balloon". ${epContext}
+      
+      FORMAT RULES:
+      - The show has a "Lineup" of people holding balloons.
+      - "Contestants" come out one by one to face the Lineup.
+      - You MUST classify every person as either "Lineup" or "Contestant".
+      - You MUST extract the specific names of couples that matched.
+      
+      Extract statistics and the full list of people.
+      
+      TRANSCRIPT:
+      ${transcript}`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: schema
+            }
+        });
+
+        const result = JSON.parse(response.text);
+
+        // 3. Upload Transcript to Firestore 'transcripts' collection
+        // This avoids CORS issues associated with 'uploadString' to Cloud Storage
+        // We now include metadata (Episode Title, Number) to easily associate the transcript in the DB console.
+        try {
+            await setDoc(doc(db, "transcripts", id), {
+                content: transcript,
+                episodeTitle: result.episodeTitle,
+                episodeNumber: episodeNumber || "N/A",
+                videoUrl: videoUrl || "",
+                analysisId: id,
+                createdAt: new Date().toISOString()
+            });
+        } catch (uploadError) {
+            console.error("Failed to save transcript to Firestore:", uploadError);
+            // We do not throw here to allow the analysis to be saved even if the full text backup fails.
+        }
+
+        // 4. Return combined result
+        return {
+            ...result,
+            id: id,
+            dateAnalyzed: new Date().toISOString().split('T')[0],
+            episodeNumber: episodeNumber,
+            videoUrl: videoUrl,
+            hasTranscript: true // Flag to tell UI to fetch from 'transcripts' collection
+        };
+    }
+};
