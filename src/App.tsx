@@ -11,6 +11,7 @@ import { ConfirmationModal } from './components/modals/ConfirmationModal';
 import { Header } from './components/layout/Header';
 import { LoginForm } from './components/admin/LoginForm';
 import { AdminPanel } from './components/admin/AdminPanel';
+import { LandingPage } from './components/landing/LandingPage';
 import { calculateStats } from './utils/stats';
 import './styles/index.css';
 
@@ -25,6 +26,7 @@ const getAdminEmail = () => {
 const ADMIN_EMAIL = getAdminEmail();
 
 const App = () => {
+    const [showLanding, setShowLanding] = useState(true);
     const [viewMode, setViewMode] = useState('public');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisInput, setAnalysisInput] = useState({ videoUrl: '', transcript: '', episodeNumber: '' });
@@ -220,6 +222,11 @@ const App = () => {
         }
     };
 
+    // Show landing page first
+    if (showLanding) {
+        return <LandingPage onEnterDashboard={() => setShowLanding(false)} />;
+    }
+
     if (isLoadingData) {
         return <div className="container" style={{ display: 'flex', justifyContent: 'center', marginTop: '5rem' }}>Loading data...</div>
     }
@@ -228,7 +235,7 @@ const App = () => {
     if (setupError) {
         return (
             <div className="container">
-                <Header viewMode={viewMode} setViewMode={setViewMode} onRequestReset={() => { }} />
+                <Header viewMode={viewMode} setViewMode={setViewMode} onRequestReset={() => { }} onBack={() => setShowLanding(true)} />
                 <SetupGuide />
             </div>
         );
@@ -238,7 +245,7 @@ const App = () => {
 
     return (
         <div className="container">
-            <Header viewMode={viewMode} setViewMode={setViewMode} onRequestReset={() => setShowResetConfirm(true)} />
+            <Header viewMode={viewMode} setViewMode={setViewMode} onRequestReset={() => setShowResetConfirm(true)} onBack={() => setShowLanding(true)} />
 
             <main>
                 {viewMode === 'admin' && (

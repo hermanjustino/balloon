@@ -82,7 +82,7 @@ export const AnalysisTable = ({ recentAnalyses, onSelectEpisode, isAdmin, onDele
                                     onClick={() => onSelectEpisode(item)}
                                     className="row-clickable"
                                 >
-                                    <td style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>
+                                    <td style={{ fontWeight: 'bold', color: 'var(--bg-color)' }}>
                                         {item.episodeNumber ? item.episodeNumber : '-'}
                                     </td>
                                     <td>{item.episodeTitle}</td>
