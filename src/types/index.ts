@@ -6,7 +6,12 @@ export interface Couple {
 export interface Contestant {
   name: string;
   age: string;
-  location: string;
+  location: {
+    city: string;
+    state: string;
+    country?: string;
+    original: string; // Fallback/Legacy
+  } | string; // Allow string for backward compatibility
   job?: string;
   role?: string; // 'Lineup' or 'Contestant'
   outcome?: string; // e.g. "Matched", "Popped", "Walked Away"

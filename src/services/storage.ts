@@ -91,6 +91,24 @@ export const StorageService = {
         } catch (e) { handleFirestoreError(e, 'addAnalysis'); }
     },
 
+    batchUpdateAnalyses: async (updates: AnalysisResult[]) => {
+        try {
+            // Firestore batches are limited to 500 ops. We'll do them in chunks.
+            const chunkSize = 400;
+            for (let i = 0; i < updates.length; i += chunkSize) {
+                const chunk = updates.slice(i, i + chunkSize);
+                const batchPromises = chunk.map(data =>
+                    setDoc(doc(db, "analyses", data.id), data, { merge: true })
+                );
+                await Promise.all(batchPromises);
+            }
+            console.log(`Successfully batch updated ${updates.length} records.`);
+        } catch (e) {
+            handleFirestoreError(e, 'batchUpdateAnalyses');
+            throw e;
+        }
+    },
+
     deleteAnalysis: async (id: string, hasTranscript: boolean) => {
         try {
             // 1. Delete Analysis Metadata

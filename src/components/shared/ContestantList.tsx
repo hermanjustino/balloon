@@ -10,7 +10,8 @@ export const ContestantList = React.memo(({ title, contestants }: { title: strin
                     <div className="c-name">{c.name}</div>
                     <div className="c-meta">
                         <span>{c.age !== 'Unknown' ? `${c.age} y/o` : 'Age N/A'}</span>
-                        {c.location !== 'Unknown' && <span>• {c.location}</span>}
+                        {typeof c.location === 'string' && c.location !== 'Unknown' && <span>• {c.location}</span>}
+                        {typeof c.location !== 'string' && <span>• {c.location.city}, {c.location.state}</span>}
                     </div>
                     {c.job && <div className="c-job">{c.job}</div>}
                     <div className={`c-outcome ${c.outcome?.toLowerCase().includes('match') ? 'outcome-matched' : 'outcome-popped'}`}>

@@ -8,6 +8,7 @@ import { AnalysisTable } from './components/dashboard/AnalysisTable';
 import { SetupGuide } from './components/modals/SetupGuide';
 import { EpisodeDetailsModal } from './components/modals/EpisodeDetailsModal';
 import { Header } from './components/layout/Header';
+import { LocationsChart } from './components/dashboard/LocationsChart';
 import { LoginForm } from './components/admin/LoginForm';
 import { AdminPanel } from './components/admin/AdminPanel';
 import { LandingPage } from './components/landing/LandingPage';
@@ -254,6 +255,7 @@ const App = () => {
                 <KeyMetrics metrics={metrics} />
                 <div className="dashboard-grid">
                     <DemographicsChart demographics={demographics} />
+                    <LocationsChart history={recentAnalyses} />
                     <AnalysisTable
                         recentAnalyses={recentAnalyses}
                         onSelectEpisode={setSelectedEpisode}

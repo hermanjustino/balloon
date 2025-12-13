@@ -1,5 +1,5 @@
-import React from 'react';
 import { User } from 'firebase/auth';
+import { MigrationTools } from './MigrationTools';
 
 export const AdminPanel = ({
     analysisInput,
@@ -27,6 +27,8 @@ export const AdminPanel = ({
                     <button onClick={logout} className="btn-secondary" style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>Logout</button>
                 </div>
             </div>
+
+            <MigrationTools />
 
             <form onSubmit={handleAnalyze}>
                 <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>

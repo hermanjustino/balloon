@@ -50,7 +50,17 @@ export const AIService = {
                         properties: {
                             name: { type: Type.STRING, description: "Name of the person" },
                             age: { type: Type.STRING, description: "Age (e.g. '24', 'Unknown')" },
-                            location: { type: Type.STRING, description: "City/State" },
+                            location: {
+                                type: Type.OBJECT,
+                                description: "Split location into components. Use standard 2-letter state codes (e.g. TX, CA, NY).",
+                                properties: {
+                                    city: { type: Type.STRING, description: "City name" },
+                                    state: { type: Type.STRING, description: "State/Province code (e.g. TX, CA)" },
+                                    country: { type: Type.STRING, description: "Country code (default US)" },
+                                    original: { type: Type.STRING, description: "The original raw location string from the transcript" }
+                                },
+                                required: ["city", "state", "original"]
+                            },
                             job: { type: Type.STRING, description: "Job title" },
                             role: { type: Type.STRING, description: "MUST be either 'Lineup' (holding balloon) or 'Contestant' (walking in to find match)." },
                             outcome: { type: Type.STRING, description: "Short result: 'Matched', 'Popped', 'Eliminated', 'Walked Away'" }
@@ -113,5 +123,71 @@ export const AIService = {
             videoUrl: videoUrl,
             hasTranscript: true // Flag to tell UI to fetch from 'transcripts' collection
         };
+    },
+
+    // NEW: Migration Helper
+    refineLocations: async (contestants: { name: string, location: string | { city: string, state: string, original: string } }[]): Promise<any[]> => {
+        // Filter only those that are strings
+        const legacyItems = contestants.filter(c => typeof c.location === 'string');
+        if (legacyItems.length === 0) return contestants;
+
+        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+
+        // Define simple schema for just location parsing
+        const locationSchema: Schema = {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    original: { type: Type.STRING, description: "The original location string provided" },
+                    city: { type: Type.STRING },
+                    state: { type: Type.STRING, description: "2-letter state code (e.g. TX)" },
+                    country: { type: Type.STRING, description: "Country code (default US)" }
+                },
+                required: ["original", "city", "state"]
+            }
+        };
+
+        const prompt = `Parse these location strings into City and State objects.
+        
+        LOCATIONS TO PARSE:
+        ${JSON.stringify(legacyItems.map(c => c.location))}
+        `;
+
+        try {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: locationSchema
+                }
+            });
+
+            const parsedLocations = JSON.parse(response.text) as any[];
+
+            // Merge back into original array
+            return contestants.map(c => {
+                if (typeof c.location !== 'string') return c;
+
+                const match = parsedLocations.find(p => p.original === c.location);
+                if (match) {
+                    return {
+                        ...c,
+                        location: {
+                            city: match.city,
+                            state: match.state,
+                            country: match.country || 'US',
+                            original: c.location as string
+                        }
+                    };
+                }
+                return c; // Fallback if AI missed one
+            });
+
+        } catch (e) {
+            console.error("Migration failed for batch:", e);
+            return contestants; // Fail safe, return original
+        }
     }
 };
