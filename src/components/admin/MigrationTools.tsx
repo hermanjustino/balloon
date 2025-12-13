@@ -17,9 +17,12 @@ export const MigrationTools = () => {
             // 1. Fetch All
             const allHistory = await StorageService.getHistory();
 
-            // 2. Identify candidates (those with string locations)
+            // 2. Identify candidates (those with string locations OR incomplete objects)
             const candidates = allHistory.filter(h =>
-                h.contestants?.some(c => typeof c.location === 'string')
+                h.contestants?.some(c =>
+                    typeof c.location === 'string' ||
+                    (typeof c.location === 'object' && (!c.location.state || c.location.state === 'Unknown'))
+                )
             );
 
             if (candidates.length === 0) {

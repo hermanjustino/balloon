@@ -127,9 +127,16 @@ export const AIService = {
 
     // NEW: Migration Helper
     refineLocations: async (contestants: { name: string, location: string | { city: string, state: string, original: string } }[]): Promise<any[]> => {
-        // Filter only those that are strings
-        const legacyItems = contestants.filter(c => typeof c.location === 'string');
-        if (legacyItems.length === 0) return contestants;
+        // Filter those that are strings OR incomplete objects (missing state/Unknown)
+        const itemsToRefine = contestants.filter(c => {
+            if (typeof c.location === 'string') return true;
+            if (typeof c.location === 'object') {
+                return !c.location.state || c.location.state === 'Unknown' || c.location.state === '';
+            }
+            return false;
+        });
+
+        if (itemsToRefine.length === 0) return contestants;
 
         const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 
@@ -141,17 +148,18 @@ export const AIService = {
                 properties: {
                     original: { type: Type.STRING, description: "The original location string provided" },
                     city: { type: Type.STRING },
-                    state: { type: Type.STRING, description: "2-letter state code (e.g. TX)" },
+                    state: { type: Type.STRING, description: "2-letter state code. INFER if possible (e.g. Miami -> FL)." },
                     country: { type: Type.STRING, description: "Country code (default US)" }
                 },
                 required: ["original", "city", "state"]
             }
         };
 
-        const prompt = `Parse these location strings into City and State objects.
+        const prompt = `Parse these locations into City and State objects.
+        If the State is missing, use your knowledge to INFER it from the City (e.g. "Chicago" -> "IL", "Miami" -> "FL").
         
-        LOCATIONS TO PARSE:
-        ${JSON.stringify(legacyItems.map(c => c.location))}
+        LOCATIONS TO PROCESS:
+        ${JSON.stringify(itemsToRefine.map(c => typeof c.location === 'string' ? c.location : c.location.original || c.location.city))}
         `;
 
         try {
@@ -168,9 +176,14 @@ export const AIService = {
 
             // Merge back into original array
             return contestants.map(c => {
-                if (typeof c.location !== 'string') return c;
+                // If this wasn't in our refine list, return as is
+                const wasRefined = itemsToRefine.includes(c);
+                if (!wasRefined) return c;
 
-                const match = parsedLocations.find(p => p.original === c.location);
+                // Find match based on the input string we sent
+                const originalKey = typeof c.location === 'string' ? c.location : (c.location.original || c.location.city);
+                const match = parsedLocations.find(p => p.original === originalKey);
+
                 if (match) {
                     return {
                         ...c,
@@ -178,7 +191,7 @@ export const AIService = {
                             city: match.city,
                             state: match.state,
                             country: match.country || 'US',
-                            original: c.location as string
+                            original: originalKey as string
                         }
                     };
                 }

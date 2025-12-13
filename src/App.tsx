@@ -255,7 +255,9 @@ const App = () => {
                 <KeyMetrics metrics={metrics} />
                 <div className="dashboard-grid">
                     <DemographicsChart demographics={demographics} />
-                    <LocationsChart history={recentAnalyses} />
+                    <div className="demographics-card">
+                        <LocationsChart history={recentAnalyses} />
+                    </div>
                     <AnalysisTable
                         recentAnalyses={recentAnalyses}
                         onSelectEpisode={setSelectedEpisode}
