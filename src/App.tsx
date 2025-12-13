@@ -7,7 +7,6 @@ import { DemographicsChart } from './components/dashboard/DemographicsChart';
 import { AnalysisTable } from './components/dashboard/AnalysisTable';
 import { SetupGuide } from './components/modals/SetupGuide';
 import { EpisodeDetailsModal } from './components/modals/EpisodeDetailsModal';
-import { ConfirmationModal } from './components/modals/ConfirmationModal';
 import { Header } from './components/layout/Header';
 import { LoginForm } from './components/admin/LoginForm';
 import { AdminPanel } from './components/admin/AdminPanel';
@@ -31,7 +30,6 @@ const App = () => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisInput, setAnalysisInput] = useState({ videoUrl: '', transcript: '', episodeNumber: '' });
     const [selectedEpisode, setSelectedEpisode] = useState<AnalysisResult | null>(null);
-    const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [setupError, setSetupError] = useState(false);
 
@@ -86,22 +84,7 @@ const App = () => {
         loadData();
     }, []);
 
-    const performReset = async () => {
-        try {
-            await StorageService.clearAll();
-            // Reset local state instantly for UI feedback
-            setMetrics({ episodesAnalyzed: 0, overallMatchRate: '-', avgAge: '-', totalParticipants: 0 });
-            setMatchData([]);
-            setDemographics({ male: 0, female: 0 });
-            setRecentAnalyses([]);
-            alert("All data has been successfully deleted from the database.");
-        } catch (e) {
-            console.error("Delete failed:", e);
-            alert("Failed to delete data. Ensure you are logged in as admin and have permission.");
-        } finally {
-            setShowResetConfirm(false);
-        }
-    }
+
 
     const handleDeleteEpisode = async (id: string, hasTranscript: boolean) => {
         if (!confirm("Are you sure you want to delete this episode record?")) return;
@@ -235,7 +218,7 @@ const App = () => {
     if (setupError) {
         return (
             <div className="container">
-                <Header viewMode={viewMode} setViewMode={setViewMode} onRequestReset={() => { }} onBack={() => setShowLanding(true)} />
+                <Header viewMode={viewMode} setViewMode={setViewMode} onBack={() => setShowLanding(true)} />
                 <SetupGuide />
             </div>
         );
@@ -245,7 +228,7 @@ const App = () => {
 
     return (
         <div className="container">
-            <Header viewMode={viewMode} setViewMode={setViewMode} onRequestReset={() => setShowResetConfirm(true)} onBack={() => setShowLanding(true)} />
+            <Header viewMode={viewMode} setViewMode={setViewMode} onBack={() => setShowLanding(true)} />
 
             <main>
                 {viewMode === 'admin' && (
@@ -288,14 +271,7 @@ const App = () => {
                 />
             )}
 
-            {showResetConfirm && (
-                <ConfirmationModal
-                    title="Clear All Data?"
-                    message="This will permanently delete all episodes, metrics, and contestant data. This action cannot be undone."
-                    onConfirm={performReset}
-                    onCancel={() => setShowResetConfirm(false)}
-                />
-            )}
+
         </div>
     );
 };

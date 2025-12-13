@@ -3,11 +3,10 @@ import React from 'react';
 type HeaderProps = {
     viewMode: string;
     setViewMode: (mode: string) => void;
-    onRequestReset: () => void;
     onBack?: () => void;
 };
 
-export const Header = ({ viewMode, setViewMode, onRequestReset, onBack }: HeaderProps) => (
+export const Header = ({ viewMode, setViewMode, onBack }: HeaderProps) => (
     <header className="header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             {onBack && (
@@ -30,9 +29,6 @@ export const Header = ({ viewMode, setViewMode, onRequestReset, onBack }: Header
             >
                 Admin
             </button>
-            {viewMode === 'admin' && (
-                <button className="reset-btn" onClick={onRequestReset} title="Clear all data">Clear</button>
-            )}
         </div>
     </header>
 );
