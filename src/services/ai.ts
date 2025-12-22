@@ -61,7 +61,23 @@ export const AIService = {
                                 },
                                 required: ["city", "state", "original"]
                             },
-                            job: { type: Type.STRING, description: "Job title" },
+                            job: { type: Type.STRING, description: "Primary job title (legacy field)" },
+                            jobs: {
+                                type: Type.ARRAY,
+                                description: "All jobs/occupations mentioned (e.g. ['Model', 'Bartender'])",
+                                items: { type: Type.STRING }
+                            },
+                            kids: {
+                                type: Type.OBJECT,
+                                description: "Children info if mentioned",
+                                properties: {
+                                    hasKids: { type: Type.BOOLEAN, description: "Whether they have kids" },
+                                    count: { type: Type.NUMBER, description: "Number of children" },
+                                    ages: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Ages of children if mentioned" }
+                                },
+                                required: ["hasKids"]
+                            },
+                            religion: { type: Type.STRING, description: "Religious affiliation if mentioned (e.g. 'Christian', 'Muslim', 'Spiritual')" },
                             role: { type: Type.STRING, description: "MUST be either 'Lineup' (holding balloon) or 'Contestant' (walking in to find match)." },
                             outcome: { type: Type.STRING, description: "Short result: 'Matched', 'Popped', 'Eliminated', 'Walked Away'" }
                         },
@@ -84,6 +100,7 @@ export const AIService = {
       - "Contestants" come out one by one to face the Lineup.
       - You MUST classify every person as either "Lineup" or "Contestant".
       - You MUST extract the specific names of couples that matched.
+      - Extract job(s), kids info, and religion if mentioned.
       
       Extract statistics and the full list of people.
       
@@ -96,6 +113,24 @@ export const AIService = {
         });
 
         const result = JSON.parse(response.text);
+
+        // 2.5 Generate stable IDs for contestants and match couples to IDs
+        const contestantsWithIds = result.contestants?.map((c: any) => ({
+            ...c,
+            id: crypto.randomUUID()  // Generate unique ID for each contestant
+        })) || [];
+
+        // Match couple names to contestant IDs
+        const couplesWithIds = result.couples?.map((couple: any) => {
+            const c1 = contestantsWithIds.find((c: any) => c.name === couple.person1);
+            const c2 = contestantsWithIds.find((c: any) => c.name === couple.person2);
+
+            return {
+                ...couple,
+                contestant1Id: c1?.id,
+                contestant2Id: c2?.id
+            };
+        }) || [];
 
         // 3. Upload Transcript to Firestore 'transcripts' collection
         // This avoids CORS issues associated with 'uploadString' to Cloud Storage
@@ -114,9 +149,11 @@ export const AIService = {
             // We do not throw here to allow the analysis to be saved even if the full text backup fails.
         }
 
-        // 4. Return combined result
+        // 4. Return combined result with IDs
         return {
             ...result,
+            contestants: contestantsWithIds,
+            couples: couplesWithIds,
             id: id,
             dateAnalyzed: new Date().toISOString().split('T')[0],
             episodeNumber: episodeNumber,

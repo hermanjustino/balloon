@@ -192,4 +192,43 @@ export const StorageService = {
             throw e; // Re-throw so the UI knows it failed
         }
     },
+
+    // NEW: Save contestants to normalized collection
+    saveContestants: async (contestants: any[], episodeId: string, episodeNumber?: string, episodeTitle?: string) => {
+        try {
+            const writes = contestants.map(contestant =>
+                setDoc(doc(db, "contestants", contestant.id), {
+                    ...contestant,
+                    episodeId,
+                    episodeNumber: episodeNumber || null,
+                    episodeTitle: episodeTitle || "",
+                    analyzedAt: new Date().toISOString()
+                })
+            );
+            await Promise.all(writes);
+        } catch (e) {
+            handleFirestoreError(e, 'saveContestants');
+        }
+    },
+
+    // NEW: Save couples to normalized collection  
+    saveCouples: async (couples: any[], episodeId: string, episodeNumber?: string, episodeTitle?: string) => {
+        try {
+            const writes = couples.map(couple =>
+                setDoc(doc(db, "couples", crypto.randomUUID()), {
+                    episodeId,
+                    episodeNumber: episodeNumber || null,
+                    episodeTitle: episodeTitle || "",
+                    contestant1Id: couple.contestant1Id,
+                    contestant2Id: couple.contestant2Id,
+                    person1Name: couple.person1,  // Denormalized for easy display
+                    person2Name: couple.person2,
+                    matchedAt: new Date().toISOString()
+                })
+            );
+            await Promise.all(writes);
+        } catch (e) {
+            handleFirestoreError(e, 'saveCouples');
+        }
+    },
 };

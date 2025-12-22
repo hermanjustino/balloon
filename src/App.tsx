@@ -12,6 +12,7 @@ import { LocationsChart } from './components/dashboard/LocationsChart';
 import { LoginForm } from './components/admin/LoginForm';
 import { AdminPanel } from './components/admin/AdminPanel';
 import { LandingPage } from './components/landing/LandingPage';
+import { ContestantSearch } from './components/pages/ContestantSearch';
 import { calculateStats } from './utils/stats';
 import './styles/index.css';
 
@@ -27,6 +28,7 @@ const ADMIN_EMAIL = getAdminEmail();
 
 const App = () => {
     const [showLanding, setShowLanding] = useState(true);
+    const [currentPage, setCurrentPage] = useState<'dashboard' | 'search'>('dashboard');
     const [viewMode, setViewMode] = useState('public');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisInput, setAnalysisInput] = useState({ videoUrl: '', transcript: '', episodeNumber: '' });
@@ -187,7 +189,10 @@ const App = () => {
                 StorageService.addAnalysis(result),
                 StorageService.saveMatchData(newMatchData),
                 StorageService.saveDemographics(newDemographics),
-                StorageService.saveMetrics(newMetrics)
+                StorageService.saveMetrics(newMetrics),
+                // NEW: Save to normalized collections for BigQuery
+                StorageService.saveContestants(result.contestants || [], result.id, result.episodeNumber, result.episodeTitle),
+                StorageService.saveCouples(result.couples || [], result.id, result.episodeNumber, result.episodeTitle)
             ]);
 
             // --- 3. Update UI ---
@@ -209,6 +214,11 @@ const App = () => {
     // Show landing page first
     if (showLanding) {
         return <LandingPage onEnterDashboard={() => setShowLanding(false)} />;
+    }
+
+    // Show Contestant Search page
+    if (currentPage === 'search') {
+        return <ContestantSearch history={recentAnalyses} onBack={() => setCurrentPage('dashboard')} />;
     }
 
     if (isLoadingData) {
@@ -264,6 +274,13 @@ const App = () => {
                         isAdmin={!!(isAuthorized && viewMode === 'admin')}
                         onDelete={handleDeleteEpisode}
                     />
+                </div>
+
+                {/* Navigation to Search Page */}
+                <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+                    <button className="analyze-btn" onClick={() => setCurrentPage('search')}>
+                        🔍 Search All Contestants
+                    </button>
                 </div>
             </main>
 

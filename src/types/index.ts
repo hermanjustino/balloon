@@ -1,9 +1,12 @@
 export interface Couple {
-  person1: string;
-  person2: string;
+  person1: string;  // Legacy: Name for display
+  person2: string;  // Legacy: Name for display
+  contestant1Id?: string;  // NEW: Reference to contestant.id for SQL joins
+  contestant2Id?: string;  // NEW: Reference to contestant.id for SQL joins
 }
 
 export interface Contestant {
+  id?: string;  // NEW: Unique ID (generated during analysis)
   name: string;
   age: string;
   location: {
@@ -12,7 +15,14 @@ export interface Contestant {
     country?: string;
     original: string; // Fallback/Legacy
   } | string; // Allow string for backward compatibility
-  job?: string;
+  job?: string; // Deprecated: single job (legacy support)
+  jobs?: string[]; // NEW: Array of jobs if multiple mentioned
+  kids?: {
+    hasKids: boolean;
+    count: number;
+    ages: (number | string)[];
+  };
+  religion?: string; // NEW: e.g. "Christian", "Spiritual"
   role?: string; // 'Lineup' or 'Contestant'
   outcome?: string; // e.g. "Matched", "Popped", "Walked Away"
 }

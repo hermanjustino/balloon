@@ -73,9 +73,9 @@ export const EpisodeDetailsModal = ({ episode, onClose, isAdmin }: { episode: An
 
                 {allParticipants.length > 0 ? (
                     <div className="modal-columns">
-                        <ContestantList title="The Lineup (Balloon Holders)" contestants={lineup.length ? lineup : unclassified} />
+                        <ContestantList title="The Lineup (Balloon Holders)" contestants={lineup.length ? lineup : unclassified} isAdmin={isAdmin} />
                         {(incoming.length > 0 || lineup.length > 0) && (
-                            <ContestantList title="The Incoming Contestants" contestants={incoming} />
+                            <ContestantList title="The Incoming Contestants" contestants={incoming} isAdmin={isAdmin} />
                         )}
                     </div>
                 ) : (
