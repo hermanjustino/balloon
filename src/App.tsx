@@ -216,8 +216,13 @@ const App = () => {
         return <LandingPage onEnterDashboard={() => setShowLanding(false)} />;
     }
 
-    // Show Contestant Search page
+    // Show Contestant Search page (Admin only)
+    const isAuthorized = user && user.email === ADMIN_EMAIL;
     if (currentPage === 'search') {
+        if (!isAuthorized) {
+            setCurrentPage('dashboard');
+            return null;
+        }
         return <ContestantSearch history={recentAnalyses} onBack={() => setCurrentPage('dashboard')} />;
     }
 
@@ -235,7 +240,7 @@ const App = () => {
         );
     }
 
-    const isAuthorized = user && user.email === ADMIN_EMAIL;
+    // isAuthorized is already defined above
 
     return (
         <div className="container">
@@ -276,12 +281,14 @@ const App = () => {
                     />
                 </div>
 
-                {/* Navigation to Search Page */}
-                <div style={{ marginTop: '2rem', textAlign: 'center' }}>
-                    <button className="analyze-btn" onClick={() => setCurrentPage('search')}>
-                        🔍 Search All Contestants
-                    </button>
-                </div>
+                {/* Navigation to Search Page (Admin only) */}
+                {isAuthorized && viewMode === 'admin' && (
+                    <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+                        <button className="analyze-btn" onClick={() => setCurrentPage('search')}>
+                            🔍 Search All Contestants
+                        </button>
+                    </div>
+                )}
             </main>
 
             {selectedEpisode && (
