@@ -56,54 +56,56 @@ export const AnalysisTable = ({ recentAnalyses, onSelectEpisode, isAdmin, onDele
             <h2 className="card-title">Episodes</h2>
             <p style={{ marginBottom: '1rem', color: 'var(--text-muted-color)', fontSize: '0.9rem' }}>Click a row to view contestant details</p>
             {sortedData && sortedData.length > 0 ? (
-                <table className="data-table">
-                    <thead>
-                        <tr>
-                            <th style={headerStyle} onClick={() => requestSort('episodeNumber')}>
-                                Ep #{getSortIndicator('episodeNumber')}
-                            </th>
-                            <th style={headerStyle} onClick={() => requestSort('episodeTitle')}>
-                                Title{getSortIndicator('episodeTitle')}
-                            </th>
-                            <th style={headerStyle} onClick={() => requestSort('matchesCount')}>
-                                Matches{getSortIndicator('matchesCount')}
-                            </th>
-                            <th style={headerStyle} onClick={() => requestSort('participantCount')}>
-                                Participants{getSortIndicator('participantCount')}
-                            </th>
-                            {isAdmin && <th>Actions</th>}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {sortedData.map((item, index) => {
-                            return (
-                                <tr
-                                    key={`${item.id}-${index}`}
-                                    onClick={() => onSelectEpisode(item)}
-                                    className="row-clickable"
-                                >
-                                    <td style={{ fontWeight: 'bold', color: 'var(--bg-color)' }}>
-                                        {item.episodeNumber ? item.episodeNumber : '-'}
-                                    </td>
-                                    <td>{item.episodeTitle}</td>
-                                    <td>{item.matchesCount}</td>
-                                    <td>{item.participantCount}</td>
-                                    {isAdmin && (
-                                        <td onClick={(e) => e.stopPropagation()}>
-                                            <button
-                                                className="delete-btn-icon"
-                                                title="Delete this episode"
-                                                onClick={() => onDelete && onDelete(item.id, !!(item.hasTranscript || item.transcriptUrl))}
-                                            >
-                                                🗑️
-                                            </button>
+                <div className="table-responsive">
+                    <table className="data-table">
+                        <thead>
+                            <tr>
+                                <th style={headerStyle} onClick={() => requestSort('episodeNumber')}>
+                                    Ep #{getSortIndicator('episodeNumber')}
+                                </th>
+                                <th style={headerStyle} onClick={() => requestSort('episodeTitle')}>
+                                    Title{getSortIndicator('episodeTitle')}
+                                </th>
+                                <th style={headerStyle} onClick={() => requestSort('matchesCount')}>
+                                    Matches{getSortIndicator('matchesCount')}
+                                </th>
+                                <th style={headerStyle} onClick={() => requestSort('participantCount')}>
+                                    Participants{getSortIndicator('participantCount')}
+                                </th>
+                                {isAdmin && <th>Actions</th>}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {sortedData.map((item, index) => {
+                                return (
+                                    <tr
+                                        key={`${item.id}-${index}`}
+                                        onClick={() => onSelectEpisode(item)}
+                                        className="row-clickable"
+                                    >
+                                        <td style={{ fontWeight: 'bold', color: 'var(--bg-color)' }}>
+                                            {item.episodeNumber ? item.episodeNumber : '-'}
                                         </td>
-                                    )}
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+                                        <td>{item.episodeTitle}</td>
+                                        <td>{item.matchesCount}</td>
+                                        <td>{item.participantCount}</td>
+                                        {isAdmin && (
+                                            <td onClick={(e) => e.stopPropagation()}>
+                                                <button
+                                                    className="delete-btn-icon"
+                                                    title="Delete this episode"
+                                                    onClick={() => onDelete && onDelete(item.id, !!(item.hasTranscript || item.transcriptUrl))}
+                                                >
+                                                    🗑️
+                                                </button>
+                                            </td>
+                                        )}
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             ) : (
                 <div className="empty-state" style={{ padding: '2rem' }}>No episodes recorded.</div>
             )}

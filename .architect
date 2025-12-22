@@ -1,0 +1,4 @@
+publish: true
+domain: app-development
+tags: [gcp, firebase, vite]
+intent: google-hiring-signal

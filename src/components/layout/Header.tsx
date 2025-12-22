@@ -8,7 +8,7 @@ type HeaderProps = {
 
 export const Header = ({ viewMode, setViewMode, onBack }: HeaderProps) => (
     <header className="header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div className="header-brand">
             {onBack && (
                 <button className="back-btn" onClick={onBack}>
                     &larr; Home
