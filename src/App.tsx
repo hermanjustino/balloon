@@ -13,15 +13,14 @@ import { LoginForm } from './components/admin/LoginForm';
 import { AdminPanel } from './components/admin/AdminPanel';
 import { LandingPage } from './components/landing/LandingPage';
 import { ContestantSearch } from './components/pages/ContestantSearch';
-import { calculateStats } from './utils/stats';
 import './styles/index.css';
 
 // --- Main App Logic (Controller) ---
 const getAdminEmail = () => {
     try {
-        return import.meta.env.VITE_ADMIN_EMAIL || "hejustino@hjdconsulting.ca";
+        return import.meta.env.VITE_ADMIN_EMAIL;
     } catch (e) {
-        return "hejustino@hjdconsulting.ca";
+        return undefined;
     }
 };
 const ADMIN_EMAIL = getAdminEmail();
@@ -41,12 +40,18 @@ const App = () => {
 
     // Initialize Data State
     const [metrics, setMetrics] = useState<Metrics>({ episodesAnalyzed: 0, overallMatchRate: '-', avgAge: '-', totalParticipants: 0 });
-    const [matchData, setMatchData] = useState<MatchDataPoint[]>([]);
     const [demographics, setDemographics] = useState<Demographics>({ male: 0, female: 0 });
     const [recentAnalyses, setRecentAnalyses] = useState<AnalysisResult[]>([]);
+    const [locationData, setLocationData] = useState<{ location: string, count: number }[]>([]);
 
     // Auth Listener
     useEffect(() => {
+        // --- DEV ONLY: Expose services for testing ---
+        if (import.meta.env.DEV) {
+            (window as any).StorageService = StorageService;
+            console.log("🛠️ Dev Mode: StorageService exposed as window.StorageService");
+        }
+
         const unsubscribe = AuthService.onAuthStateChanged((currentUser) => {
             if (currentUser && currentUser.email !== ADMIN_EMAIL) {
                 // Enforce "Only I can sign in" - Kick out unauthorized users immediately
@@ -60,32 +65,45 @@ const App = () => {
         return () => unsubscribe();
     }, []);
 
-    // Load Data on Mount (Async for Firestore)
-    useEffect(() => {
-        async function loadData() {
-            try {
-                const [m, matches, demo, history] = await Promise.all([
-                    StorageService.getMetrics(),
-                    StorageService.getMatchData(),
-                    StorageService.getDemographics(),
-                    StorageService.getHistory()
-                ]);
+    const refreshStats = async (currentUser?: User | null) => {
+        const activeUser = currentUser || user;
+        console.log("♻️ App: Refreshing dashboard data (Auth Status:", !!activeUser, ")");
 
-                setMetrics(m);
-                setMatchData(matches);
-                setDemographics(demo);
-                setRecentAnalyses(history);
-            } catch (e: any) {
-                // Detect if this is a permission error (rules not set up)
-                if (e.name === 'FirebasePermissionError') {
-                    setSetupError(true);
-                }
-            } finally {
-                setIsLoadingData(false);
+        // 1. Fetch BigQuery Stats (OLAP) - Decoupled
+        try {
+            const [statsRes, locations] = await Promise.all([
+                StorageService.getStats(activeUser),
+                StorageService.getLocations(activeUser)
+            ]);
+            console.log("✅ App: BigQuery stats received", { metrics: !!statsRes.metrics.episodesAnalyzed });
+            setMetrics(statsRes.metrics);
+            setDemographics(statsRes.demographics);
+            setLocationData(locations);
+        } catch (e) {
+            console.error("❌ App: BigQuery fetch failed:", e);
+        }
+
+        // 2. Fetch Firestore History (OLTP) - Decoupled
+        try {
+            const history = await StorageService.getHistory();
+            console.log("✅ App: Firestore history received", { count: history.length });
+            setRecentAnalyses(history);
+        } catch (e: any) {
+            console.error("❌ App: Firestore fetch failed:", e);
+            if (e.name === 'FirebasePermissionError') {
+                setSetupError(true);
             }
         }
+    };
+
+    // Load Data on Mount and Auth state change
+    useEffect(() => {
+        async function loadData() {
+            await refreshStats(user);
+            setIsLoadingData(false);
+        }
         loadData();
-    }, []);
+    }, [user]);
 
 
 
@@ -95,24 +113,8 @@ const App = () => {
         try {
             await StorageService.deleteAnalysis(id, hasTranscript);
 
-            // Update local state by removing the deleted item
-            const updatedHistory = recentAnalyses.filter(item => item.id !== id);
-
-            // Recalculate global stats based on remaining items
-            const { metrics: newMetrics, demographics: newDemographics, matchData: newMatchData } = calculateStats(updatedHistory);
-
-            // Save recalculated stats to backend
-            await Promise.all([
-                StorageService.saveMatchData(newMatchData),
-                StorageService.saveDemographics(newDemographics),
-                StorageService.saveMetrics(newMetrics)
-            ]);
-
-            // Update UI
-            setRecentAnalyses(updatedHistory);
-            setMetrics(newMetrics);
-            setDemographics(newDemographics);
-            setMatchData(newMatchData);
+            // Refresh everything (OLTP history is instant, OLAP metrics follow export schedule)
+            await refreshStats();
 
         } catch (e: any) {
             console.error("Failed to delete episode:", e);
@@ -143,63 +145,17 @@ const App = () => {
                 analysisInput.videoUrl
             );
 
-            // --- 1. Calculate New State ---
-
-            // History
-            const newHistory = [result, ...recentAnalyses];
-
-            // Match Data
-            const displayTitle = result.episodeNumber
-                ? `Ep ${result.episodeNumber}: ${result.episodeTitle}`
-                : result.episodeTitle;
-            const newMatchData = [{ name: displayTitle, rate: result.matchRate }, ...matchData];
-
-            // Demographics
-            let newDemographics = demographics;
-            const totalParticipants = (metrics.totalParticipants || 0) + result.participantCount;
-            if (totalParticipants > 0) {
-                const prevCount = metrics.totalParticipants || 0;
-                const newMale = ((demographics.male * prevCount) + (result.malePercentage * result.participantCount)) / totalParticipants;
-                const newFemale = ((demographics.female * prevCount) + (result.femalePercentage * result.participantCount)) / totalParticipants;
-                newDemographics = { male: Math.round(newMale), female: Math.round(newFemale) };
-            }
-
-            // Metrics
-            const episodes = (metrics.episodesAnalyzed || 0) + 1;
-            const prevAvgAge = typeof metrics.avgAge === 'number' ? metrics.avgAge : 0;
-            const newAvgAge = prevAvgAge === 0
-                ? result.avgAge
-                : ((prevAvgAge * (metrics.totalParticipants || 0)) + (result.avgAge * result.participantCount)) / totalParticipants;
-
-            const prevMatchRate = typeof metrics.overallMatchRate === 'number' ? metrics.overallMatchRate : 0;
-            const newMatchRate = prevMatchRate === 0
-                ? result.matchRate
-                : ((prevMatchRate * (episodes - 1)) + result.matchRate) / episodes;
-
-            const newMetrics = {
-                episodesAnalyzed: episodes,
-                overallMatchRate: newMatchRate,
-                avgAge: newAvgAge,
-                totalParticipants: totalParticipants
-            };
-
-            // --- 2. Save to Firestore (Explicitly) ---
-            // We do this BEFORE updating state to ensure persistence works
+            // --- 2. Save to Firestore (OLTP) ---
             await Promise.all([
                 StorageService.addAnalysis(result),
-                StorageService.saveMatchData(newMatchData),
-                StorageService.saveDemographics(newDemographics),
-                StorageService.saveMetrics(newMetrics),
-                // NEW: Save to normalized collections for BigQuery
+                // NEW: Save to normalized collections for BigQuery (OLAP Input)
                 StorageService.saveContestants(result.contestants || [], result.id, result.episodeNumber, result.episodeTitle),
                 StorageService.saveCouples(result.couples || [], result.id, result.episodeNumber, result.episodeTitle)
             ]);
 
             // --- 3. Update UI ---
-            setRecentAnalyses(newHistory);
-            setMatchData(newMatchData);
-            setDemographics(newDemographics);
-            setMetrics(newMetrics);
+            // OLTP History updates immediately
+            await refreshStats();
 
             setAnalysisInput({ videoUrl: '', transcript: '', episodeNumber: '' });
 
@@ -268,10 +224,12 @@ const App = () => {
                     </>
                 )}
                 <KeyMetrics metrics={metrics} />
+
                 <div className="dashboard-grid">
                     <DemographicsChart demographics={demographics} />
                     <div className="demographics-card">
                         <LocationsChart history={recentAnalyses} />
+                        {/* Optional: Add a subtle overlay or toggle for the BigQuery location data if desired */}
                     </div>
                     <AnalysisTable
                         recentAnalyses={recentAnalyses}

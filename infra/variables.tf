@@ -40,3 +40,9 @@ variable "contact_zip" {
   type        = string
   default     = ""
 }
+
+variable "contact_country_code" {
+  description = "Domain contact country code"
+  type        = string
+  default     = ""
+}

@@ -2,6 +2,7 @@ import { collection, getDocs, doc, setDoc, getDoc, query, orderBy, deleteDoc } f
 import { ref, deleteObject, listAll } from "firebase/storage";
 import { db, storage, handleFirestoreError } from "./firebase";
 import { Metrics, MatchDataPoint, Demographics, AnalysisResult } from "../types";
+import { AuthService } from "./auth";
 
 /* 
   -----------------------------------------------------------------------
@@ -10,71 +11,85 @@ import { Metrics, MatchDataPoint, Demographics, AnalysisResult } from "../types"
   -----------------------------------------------------------------------
 */
 
+const STATS_API_URL = "/api/stats";
+
 export const StorageService = {
-    getMetrics: async (): Promise<Metrics> => {
+    getStats: async (forceUser?: any): Promise<{ metrics: Metrics, demographics: Demographics }> => {
         try {
-            const docRef = doc(db, "balloon_data", "metrics");
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                return docSnap.data() as Metrics;
+            const user = forceUser || AuthService.getCurrentUser();
+            if (!user) {
+                console.log("📊 Storage: No user yet, returning default metrics.");
+                // Return defaults quietly during initialization
+                return {
+                    metrics: { episodesAnalyzed: 0, overallMatchRate: '-', avgAge: '-', totalParticipants: 0 },
+                    demographics: { male: 0, female: 0 }
+                };
             }
+
+            const token = await user.getIdToken();
+            console.log("📊 Storage: Fetching live stats from Cloud Run...");
+            const response = await fetch(`${STATS_API_URL}/overview`, {
+                headers: {
+                    'X-Firebase-Auth': token
+                }
+            });
+
+            if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+            const metrics = await response.json();
+
+            return {
+                metrics: {
+                    episodesAnalyzed: metrics.episodesAnalyzed,
+                    overallMatchRate: metrics.overallMatchRate,
+                    avgAge: metrics.avgAge,
+                    totalParticipants: metrics.totalParticipants
+                },
+                demographics: {
+                    male: metrics.malePercentage,
+                    female: metrics.femalePercentage
+                }
+            };
         } catch (error) {
-            // If permission denied on metrics, likely database is fresh/unconfigured.
-            handleFirestoreError(error, 'getMetrics');
+            console.error('getStats failed:', error);
+            // Return defaults on error
+            return {
+                metrics: { episodesAnalyzed: 0, overallMatchRate: '-', avgAge: '-', totalParticipants: 0 },
+                demographics: { male: 0, female: 0 }
+            };
         }
-        // Default Fallback
-        return {
-            episodesAnalyzed: 0,
-            overallMatchRate: '-',
-            avgAge: '-',
-            totalParticipants: 0,
-        };
     },
 
-    saveMetrics: async (data: Metrics) => {
+    getLocations: async (forceUser?: any): Promise<{ location: string, count: number }[]> => {
         try {
-            await setDoc(doc(db, "balloon_data", "metrics"), data);
-        } catch (e) { handleFirestoreError(e, 'saveMetrics'); }
-    },
+            const user = forceUser || AuthService.getCurrentUser();
+            if (!user) return [];
 
-    getMatchData: async (): Promise<MatchDataPoint[]> => {
-        try {
-            const docRef = doc(db, "balloon_data", "matchData");
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                return docSnap.data().points as MatchDataPoint[];
-            }
-        } catch (e) {
-            handleFirestoreError(e, 'getMatchData');
+            const token = await user.getIdToken();
+            const response = await fetch(`${STATS_API_URL}/locations`, {
+                headers: {
+                    'X-Firebase-Auth': token
+                }
+            });
+
+            if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+            return await response.json();
+        } catch (error) {
+            console.error('getLocations failed:', error);
+            return [];
         }
-        return [];
     },
 
-    saveMatchData: async (data: MatchDataPoint[]) => {
-        try {
-            await setDoc(doc(db, "balloon_data", "matchData"), { points: data });
-        } catch (e) { handleFirestoreError(e, 'saveMatchData'); }
+    getMetrics: async (): Promise<Metrics> => {
+        // Deprecated: Use getStats instead
+        const res = await StorageService.getStats();
+        return res.metrics;
     },
 
-    getDemographics: async (): Promise<Demographics> => {
-        try {
-            const docRef = doc(db, "balloon_data", "demographics");
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                return docSnap.data() as Demographics;
-            }
-        } catch (e) { handleFirestoreError(e, 'getDemographics'); }
-        return { male: 0, female: 0 };
-    },
-
-    saveDemographics: async (data: Demographics) => {
-        try {
-            await setDoc(doc(db, "balloon_data", "demographics"), data);
-        } catch (e) { handleFirestoreError(e, 'saveDemographics'); }
-    },
+    // demographics and matchData are now powered by BigQuery via getStats()
 
     getHistory: async (): Promise<AnalysisResult[]> => {
         try {
+            console.log("📊 Storage: Fetching history from Firestore...");
             const q = query(collection(db, "analyses"), orderBy("dateAnalyzed", "desc"));
             const querySnapshot = await getDocs(q);
             return querySnapshot.docs.map(d => ({ ...d.data(), id: d.id } as AnalysisResult));

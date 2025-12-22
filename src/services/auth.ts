@@ -19,5 +19,8 @@ export const AuthService = {
     },
     onAuthStateChanged: (callback: (user: User | null) => void) => {
         return onAuthStateChanged(auth, callback);
+    },
+    getCurrentUser: () => {
+        return auth.currentUser;
     }
 };
