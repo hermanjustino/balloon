@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAdmin() {
+      return request.auth != null && 
+             request.auth.token.email_verified == true && 
+             request.auth.token.email == '${admin_email}';
+    }
+
+    // Public read access
+    match /{document=**} {
+      allow read: if true;
+    }
+
+    // Admin-only write access
+    match /analyses/{analysisId} {
+      allow write: if isAdmin();
+    }
+    
+    match /transcripts/{transcriptId} {
+      allow write: if isAdmin();
+    }
+
+    match /balloon_data/{docId} {
+      allow write: if isAdmin();
+    }
+
+    match /contestants/{contestantId} {
+      allow write: if isAdmin();
+    }
+
+    match /couples/{coupleId} {
+      allow write: if isAdmin();
+    }
+  }
+}
