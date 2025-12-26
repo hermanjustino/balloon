@@ -15,8 +15,11 @@ provider "google-beta" {
 module "firebase" {
   source = "./modules/firebase"
   
-  project_id  = var.project_id
-  admin_email = var.admin_email
+  project_id          = var.project_id
+  admin_email         = var.admin_email
+  bigquery_dataset_id = module.bigquery.dataset_id
+  
+  depends_on = [module.bigquery]
 }
 
 # ============================================================================
@@ -30,19 +33,7 @@ module "bigquery" {
   admin_email = var.admin_email
 }
 
-# ============================================================================
-# DATA PIPELINE MODULE
-# Handles: Scheduled Firestore exports to BigQuery
-# ============================================================================
-module "data_pipeline" {
-  source = "./modules/data-pipeline"
-  
-  project_id           = var.project_id
-  region               = var.region
-  bigquery_dataset_id  = module.bigquery.dataset_id
-  
-  depends_on = [module.bigquery]
-}
+
 
 # ============================================================================
 # DOMAIN MODULE (OPTIONAL)

@@ -101,7 +101,7 @@ export const MigrationTools = () => {
                     updates.push({
                         ...result,
                         id: ep.id, // Keep original ID for overwrite
-                        dateAnalyzed: ep.dateAnalyzed // Keep original analysis date
+                        dateAnalyzed: ep.dateAnalyzed || result.dateAnalyzed || new Date().toISOString().split('T')[0]
                     });
 
                 } catch (epError) {
@@ -168,8 +168,8 @@ export const MigrationTools = () => {
 
                     return {
                         ...couple,
-                        contestant1Id: couple.contestant1Id || c1?.id,
-                        contestant2Id: couple.contestant2Id || c2?.id
+                        contestant1Id: couple.contestant1Id || c1?.id || null,
+                        contestant2Id: couple.contestant2Id || c2?.id || null
                     };
                 }) || [];
 

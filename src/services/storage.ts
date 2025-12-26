@@ -18,7 +18,6 @@ export const StorageService = {
         try {
             const user = forceUser || AuthService.getCurrentUser();
             if (!user) {
-                console.log("📊 Storage: No user yet, returning default metrics.");
                 // Return defaults quietly during initialization
                 return {
                     metrics: { episodesAnalyzed: 0, overallMatchRate: '-', avgAge: '-', totalParticipants: 0 },
@@ -27,7 +26,6 @@ export const StorageService = {
             }
 
             const token = await user.getIdToken();
-            console.log("📊 Storage: Fetching live stats from Cloud Run...");
             const response = await fetch(`${STATS_API_URL}/overview`, {
                 headers: {
                     'X-Firebase-Auth': token
@@ -89,7 +87,6 @@ export const StorageService = {
 
     getHistory: async (): Promise<AnalysisResult[]> => {
         try {
-            console.log("📊 Storage: Fetching history from Firestore...");
             const q = query(collection(db, "analyses"), orderBy("dateAnalyzed", "desc"));
             const querySnapshot = await getDocs(q);
             return querySnapshot.docs.map(d => ({ ...d.data(), id: d.id } as AnalysisResult));
@@ -117,7 +114,6 @@ export const StorageService = {
                 );
                 await Promise.all(batchPromises);
             }
-            console.log(`Successfully batch updated ${updates.length} records.`);
         } catch (e) {
             handleFirestoreError(e, 'batchUpdateAnalyses');
             throw e;
@@ -200,8 +196,6 @@ export const StorageService = {
             } catch (storageError) {
                 console.warn("Storage cleanup warning (ignorable if not using storage):", storageError);
             }
-
-            console.log("All data successfully deleted from Firestore.");
         } catch (e) {
             handleFirestoreError(e, 'clearAll');
             throw e; // Re-throw so the UI knows it failed

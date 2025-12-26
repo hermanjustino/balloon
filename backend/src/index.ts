@@ -52,8 +52,9 @@ const authenticate = async (req: express.Request, res: express.Response, next: e
 app.use(authenticate);
 
 // 1. Overview Stats (Optimized by BI Engine)
-app.get('/overview', async (req, res) => {
+app.get('/api/stats/overview', async (req, res) => {
     try {
+        console.log(`[QUERY] Fetching overview from ${PROJECT_ID}.balloon_dataset.aggregated_metrics`);
         const query = `
             SELECT 
                 episodesAnalyzed,
@@ -68,6 +69,11 @@ app.get('/overview', async (req, res) => {
             LIMIT 1
         `;
         const [rows] = await bigquery.query({ query });
+        console.log(`[QUERY] Rows found: ${rows.length}`);
+        
+        if (rows.length > 0) {
+            console.log(`[QUERY] Latest data point:`, JSON.stringify(rows[0]));
+        }
 
         if (rows.length === 0) {
             return res.json({
@@ -81,28 +87,24 @@ app.get('/overview', async (req, res) => {
             });
         }
         res.json(rows[0]);
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error fetching overview stats:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ error: 'Internal Server Error', details: error.message });
     }
 });
 
 // 2. Trend Data
-app.get('/trends', async (req, res) => {
+app.get('/api/stats/trends', async (req, res) => {
     try {
         const query = `
             SELECT 
-                CASE 
-                    WHEN episodeNumber IS NOT NULL THEN CONCAT('Ep ', episodeNumber, ': ', episodeTitle)
-                    ELSE episodeTitle 
-                END as name,
-                COALESCE(CAST(matchRate.float AS FLOAT64), CAST(matchRate.integer AS FLOAT64)) as rate
-            FROM \`${PROJECT_ID}.balloon_dataset.analyses\`
+                name,
+                rate
+            FROM \`${PROJECT_ID}.balloon_dataset.aggregated_trends\`
             ORDER BY dateAnalyzed DESC
-            LIMIT 20
         `;
         const [rows] = await bigquery.query({ query });
-        res.json(rows.reverse());
+        res.json(rows);
     } catch (error) {
         console.error('Error fetching trends:', error);
         res.status(500).json({ error: 'Internal Server Error' });
@@ -110,17 +112,14 @@ app.get('/trends', async (req, res) => {
 });
 
 // 3. NEW: Location Stats
-app.get('/locations', async (req, res) => {
+app.get('/api/stats/locations', async (req, res) => {
     try {
         const query = `
             SELECT 
-                location.city as location,
-                COUNT(*) as count
-            FROM \`${PROJECT_ID}.balloon_dataset.contestants\`
-            WHERE location.city IS NOT NULL AND location.city != 'Unknown'
-            GROUP BY 1
-            ORDER BY 2 DESC
-            LIMIT 10
+                location,
+                count
+            FROM \`${PROJECT_ID}.balloon_dataset.aggregated_locations\`
+            ORDER BY count DESC
         `;
         const [rows] = await bigquery.query({ query });
         res.json(rows);

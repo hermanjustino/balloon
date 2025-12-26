@@ -1,22 +1,33 @@
-WITH contestant_stats AS (
+WITH contestant_data AS (
+  SELECT
+    SAFE_CAST(JSON_VALUE(data, '$.age') AS INT64) as age,
+    JSON_VALUE(data, '$.gender') as gender,
+    COALESCE(JSON_VALUE(data, '$.episodeId'), JSON_VALUE(data, '$.episode_id')) as episode_id
+  FROM `${project_id}.balloon_dataset.contestants_raw_latest`
+),
+couple_data AS (
+  SELECT 1
+  FROM `${project_id}.balloon_dataset.couples_raw_latest`
+),
+contestant_stats AS (
   SELECT 
     COUNT(*) as total_contestants,
-    AVG(age) as avg_age,
+    AVG(CAST(age AS FLOAT64)) as avg_age,
     COUNTIF(LOWER(gender) = 'male') as male_count,
     COUNTIF(LOWER(gender) = 'female') as female_count,
     COUNT(DISTINCT episode_id) as episodes_count
-  FROM `${project_id}.balloon_dataset.contestants`
+  FROM contestant_data
 ),
 couple_stats AS (
   SELECT COUNT(*) * 2 as matched_contestants
-  FROM `${project_id}.balloon_dataset.couples`
+  FROM couple_data
 )
 SELECT
-  cs.episodes_count as episodesAnalyzed,
-  ROUND(SAFE_DIVIDE(cp.matched_contestants, cs.total_contestants) * 100, 2) as overallMatchRate,
-  ROUND(cs.avg_age, 1) as avgAge,
-  cs.total_contestants as totalParticipants,
-  ROUND(SAFE_DIVIDE(cs.male_count, cs.total_contestants) * 100, 0) as malePercentage,
-  ROUND(SAFE_DIVIDE(cs.female_count, cs.total_contestants) * 100, 0) as femalePercentage,
+  COALESCE(cs.episodes_count, 0) as episodesAnalyzed,
+  ROUND(SAFE_DIVIDE(COALESCE(cp.matched_contestants, 0), NULLIF(cs.total_contestants, 0)) * 100, 2) as overallMatchRate,
+  ROUND(COALESCE(cs.avg_age, 0), 1) as avgAge,
+  COALESCE(cs.total_contestants, 0) as totalParticipants,
+  ROUND(SAFE_DIVIDE(COALESCE(cs.male_count, 0), NULLIF(cs.total_contestants, 0)) * 100, 0) as malePercentage,
+  ROUND(SAFE_DIVIDE(COALESCE(cs.female_count, 0), NULLIF(cs.total_contestants, 0)) * 100, 0) as femalePercentage,
   CURRENT_TIMESTAMP() as lastUpdated
 FROM contestant_stats cs, couple_stats cp

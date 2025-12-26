@@ -49,6 +49,7 @@ export const AIService = {
                         type: Type.OBJECT,
                         properties: {
                             name: { type: Type.STRING, description: "Name of the person" },
+                            gender: { type: Type.STRING, description: "Gender of the person: 'Male' or 'Female' (INFER from name/pronouns if not explicitly stated)." },
                             age: { type: Type.STRING, description: "Age (e.g. '24', 'Unknown')" },
                             location: {
                                 type: Type.OBJECT,
@@ -81,7 +82,7 @@ export const AIService = {
                             role: { type: Type.STRING, description: "MUST be either 'Lineup' (holding balloon) or 'Contestant' (walking in to find match)." },
                             outcome: { type: Type.STRING, description: "Short result: 'Matched', 'Popped', 'Eliminated', 'Walked Away'" }
                         },
-                        required: ["name", "age", "location", "role", "outcome"]
+                        required: ["name", "gender", "age", "location", "role", "outcome"]
                     }
                 }
             },
@@ -99,6 +100,7 @@ export const AIService = {
       - The show has a "Lineup" of people holding balloons.
       - "Contestants" come out one by one to face the Lineup.
       - You MUST classify every person as either "Lineup" or "Contestant".
+      - You MUST identify the gender (Male/Female) for EVERY person. Infer from name/pronouns if necessary.
       - You MUST extract the specific names of couples that matched.
       - Extract job(s), kids info, and religion if mentioned.
       
@@ -112,7 +114,21 @@ export const AIService = {
             }
         });
 
-        const result = JSON.parse(response.text);
+        let jsonString = response.text;
+        // Strip markdown code blocks if present
+        if (jsonString.includes("```json")) {
+            jsonString = jsonString.replace(/```json/g, "").replace(/```/g, "");
+        } else if (jsonString.includes("```")) {
+            jsonString = jsonString.replace(/```/g, "");
+        }
+        
+        let result;
+        try {
+            result = JSON.parse(jsonString);
+        } catch (parseError) {
+            console.error("JSON Parse Error:", parseError);
+            throw new Error("Failed to parse AI response.");
+        }
 
         // 2.5 Generate stable IDs for contestants and match couples to IDs
         const contestantsWithIds = result.contestants?.map((c: any) => ({
@@ -127,8 +143,8 @@ export const AIService = {
 
             return {
                 ...couple,
-                contestant1Id: c1?.id,
-                contestant2Id: c2?.id
+                contestant1Id: c1?.id || null,
+                contestant2Id: c2?.id || null
             };
         }) || [];
 
@@ -156,8 +172,8 @@ export const AIService = {
             couples: couplesWithIds,
             id: id,
             dateAnalyzed: new Date().toISOString().split('T')[0],
-            episodeNumber: episodeNumber,
-            videoUrl: videoUrl,
+            episodeNumber: episodeNumber || null,
+            videoUrl: videoUrl || null,
             hasTranscript: true // Flag to tell UI to fetch from 'transcripts' collection
         };
     },

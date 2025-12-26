@@ -11,8 +11,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api/stats': {
           target: 'https://stats-api-743597976254.us-central1.run.app',
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api\/stats/, '')
+          changeOrigin: true
         }
       }
     },
