@@ -29,3 +29,6 @@ dist-ssr
 *.tfstate.backup
 *.tfvars
 .terraform.lock.hcl
+
+# Environment Variables
+.env
