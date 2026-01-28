@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       proxy: {
         '/api/stats': {
-          target: 'https://stats-api-743597976254.us-central1.run.app',
+          target: env.VITE_API_TARGET || 'https://stats-api-743597976254.us-central1.run.app',
           changeOrigin: true
         }
       }

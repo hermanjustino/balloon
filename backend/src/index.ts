@@ -6,24 +6,24 @@ import { BigQuery } from '@google-cloud/bigquery';
 admin.initializeApp();
 const app = express();
 const port = process.env.PORT || 8080;
-const bigquery = new BigQuery();
+const PROJECT_ID = process.env.PROJECT_ID || 'balloon-87473';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+const bigquery = new BigQuery({ projectId: PROJECT_ID });
 
 app.use(cors());
 app.use(express.json());
 
-const PROJECT_ID = process.env.PROJECT_ID;
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-
 // Middleware to verify Firebase ID Token
 const authenticate = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    // Skip auth for health check
-    if (req.path === '/health') return next();
+    // Skip auth for health check and public stats
+    if (req.path === '/health' || req.path.startsWith('/api/stats')) return next();
 
     const idToken = req.headers['x-firebase-auth'] as string;
     if (!idToken) {
         console.warn('Missing X-Firebase-Auth header');
         return res.status(401).json({ error: 'Unauthorized: Missing Token' });
     }
+    // ... rest of auth logic
 
     try {
         const decodedToken = await admin.auth().verifyIdToken(idToken);
@@ -70,7 +70,7 @@ app.get('/api/stats/overview', async (req, res) => {
         `;
         const [rows] = await bigquery.query({ query });
         console.log(`[QUERY] Rows found: ${rows.length}`);
-        
+
         if (rows.length > 0) {
             console.log(`[QUERY] Latest data point:`, JSON.stringify(rows[0]));
         }

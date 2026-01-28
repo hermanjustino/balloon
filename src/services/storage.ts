@@ -17,20 +17,17 @@ export const StorageService = {
     getStats: async (forceUser?: any): Promise<{ metrics: Metrics, demographics: Demographics }> => {
         try {
             const user = forceUser || AuthService.getCurrentUser();
-            if (!user) {
-                // Return defaults quietly during initialization
-                return {
-                    metrics: { episodesAnalyzed: 0, overallMatchRate: '-', avgAge: '-', totalParticipants: 0 },
-                    demographics: { male: 0, female: 0 }
-                };
+
+            const headers: Record<string, string> = {};
+            if (user) {
+                const token = await user.getIdToken();
+                headers['X-Firebase-Auth'] = token;
+                console.log("📊 Storage: Fetching metrics with auth...");
+            } else {
+                console.log("📊 Storage: Fetching public metrics...");
             }
 
-            const token = await user.getIdToken();
-            const response = await fetch(`${STATS_API_URL}/overview`, {
-                headers: {
-                    'X-Firebase-Auth': token
-                }
-            });
+            const response = await fetch(`${STATS_API_URL}/overview`, { headers });
 
             if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
             const metrics = await response.json();
@@ -60,14 +57,14 @@ export const StorageService = {
     getLocations: async (forceUser?: any): Promise<{ location: string, count: number }[]> => {
         try {
             const user = forceUser || AuthService.getCurrentUser();
-            if (!user) return [];
 
-            const token = await user.getIdToken();
-            const response = await fetch(`${STATS_API_URL}/locations`, {
-                headers: {
-                    'X-Firebase-Auth': token
-                }
-            });
+            const headers: Record<string, string> = {};
+            if (user) {
+                const token = await user.getIdToken();
+                headers['X-Firebase-Auth'] = token;
+            }
+
+            const response = await fetch(`${STATS_API_URL}/locations`, { headers });
 
             if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
             return await response.json();
