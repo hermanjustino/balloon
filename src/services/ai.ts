@@ -93,7 +93,7 @@ export const AIService = {
 
         // 2. Perform AI Analysis
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.5-pro',
             contents: `Analyze the following transcript from the dating show "Pop the Balloon". ${epContext}
       
       FORMAT RULES:
@@ -121,7 +121,7 @@ export const AIService = {
         } else if (jsonString.includes("```")) {
             jsonString = jsonString.replace(/```/g, "");
         }
-        
+
         let result;
         try {
             result = JSON.parse(jsonString);
@@ -217,7 +217,7 @@ export const AIService = {
 
         try {
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-2.5-pro',
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
