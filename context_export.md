@@ -34,6 +34,8 @@ We have implemented a robust "Clear-then-Upsert" architecture with deterministic
 - Removed **171 duplicate analyses** from Firestore.
 - Removed **74 orphaned contestants** and **2 orphaned couples**.
 - Reset the total episode count to the correct number (**89**).
+- **Contestant Count Sync**: Resolved a discrepancy where the front page showed 1330 instead of 1262. Manually triggered BigQuery aggregation to sync stale metrics with clean Firestore data.
+- **Burton Case Study**: Investigated a reported duplicate of "Burton". Confirmed he is a **returning contestant** appearing in Ep 75 (Eliminated) and Ep 89 (Matched). The system correctly tracks these as separate appearances.
 
 ## 📊 Current System State
 - **Frontend**: Accessible at `http://localhost:3000` (Local) and `luvlytics.xyz` (Production).

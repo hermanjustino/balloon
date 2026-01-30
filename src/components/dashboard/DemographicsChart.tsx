@@ -8,7 +8,7 @@ export const DemographicsChart = React.memo(({ demographics }: { demographics: D
             <div className="empty-state" style={{ height: '250px' }}>No demographic data.</div>
         ) : (
             <div className="pie-chart-container" style={{ '--male-pct': `${demographics?.male || 0}%` } as React.CSSProperties}>
-                <div className="pie-chart" role="img" aria-label={`Pie chart: ${demographics?.male || 0}% Male`}></div>
+                <div className="pie-chart" role="img" aria-label={`Pie chart: ${demographics?.male || 0}% Male, ${demographics?.female || 0}% Female`}></div>
                 <div className="pie-legend">
                     <div className="legend-item">
                         <span className="legend-color" style={{ backgroundColor: 'var(--bg-color)' }}></span>

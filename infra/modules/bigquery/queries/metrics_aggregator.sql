@@ -27,7 +27,7 @@ SELECT
   ROUND(SAFE_DIVIDE(COALESCE(cp.matched_contestants, 0), NULLIF(cs.total_contestants, 0)) * 100, 2) as overallMatchRate,
   ROUND(COALESCE(cs.avg_age, 0), 1) as avgAge,
   COALESCE(cs.total_contestants, 0) as totalParticipants,
-  ROUND(SAFE_DIVIDE(COALESCE(cs.male_count, 0), NULLIF(cs.total_contestants, 0)) * 100, 0) as malePercentage,
-  ROUND(SAFE_DIVIDE(COALESCE(cs.female_count, 0), NULLIF(cs.total_contestants, 0)) * 100, 0) as femalePercentage,
+  ROUND(SAFE_DIVIDE(COALESCE(cs.male_count, 0), NULLIF(cs.male_count + cs.female_count, 0)) * 100, 0) as malePercentage,
+  100 - ROUND(SAFE_DIVIDE(COALESCE(cs.male_count, 0), NULLIF(cs.male_count + cs.female_count, 0)) * 100, 0) as femalePercentage,
   CURRENT_TIMESTAMP() as lastUpdated
 FROM contestant_stats cs, couple_stats cp
