@@ -146,12 +146,7 @@ const App = () => {
             );
 
             // --- 2. Save to Firestore (OLTP) ---
-            await Promise.all([
-                StorageService.addAnalysis(result),
-                // NEW: Save to normalized collections for BigQuery (OLAP Input)
-                StorageService.saveContestants(result.contestants || [], result.id, result.episodeNumber, result.episodeTitle),
-                StorageService.saveCouples(result.couples || [], result.id, result.episodeNumber, result.episodeTitle)
-            ]);
+            await StorageService.fullySaveAnalysis(result);
 
             // --- 3. Update UI ---
             // OLTP History updates immediately

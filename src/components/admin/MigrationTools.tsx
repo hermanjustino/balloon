@@ -77,8 +77,7 @@ export const MigrationTools = () => {
                 return;
             }
 
-            setProgress(`Found ${withTranscripts.length} episodes with transcripts. Re-analyzing...`);
-            const updates: AnalysisResult[] = [];
+            let updatedCount = 0;
             const failed: string[] = [];
 
             for (let i = 0; i < withTranscripts.length; i++) {
@@ -94,15 +93,17 @@ export const MigrationTools = () => {
                         continue;
                     }
 
-                    // Re-analyze (but using existing ID to overwrite)
+                    // Re-analyze
                     const result = await AIService.analyzeTranscript(transcript, ep.episodeNumber, ep.videoUrl);
 
-                    // Preserve original ID and merge new data
-                    updates.push({
+                    // Preserve original date but new result (stable ID is now handled by AIService)
+                    const updatedResult: AnalysisResult = {
                         ...result,
-                        id: ep.id, // Keep original ID for overwrite
                         dateAnalyzed: ep.dateAnalyzed || result.dateAnalyzed || new Date().toISOString().split('T')[0]
-                    });
+                    };
+
+                    await StorageService.fullySaveAnalysis(updatedResult);
+                    updatedCount++;
 
                 } catch (epError) {
                     console.error(`Failed to re-analyze ${label}:`, epError);
@@ -110,10 +111,7 @@ export const MigrationTools = () => {
                 }
             }
 
-            setProgress(`Saving ${updates.length} updated analyses...`);
-            await StorageService.batchUpdateAnalyses(updates);
-
-            let message = `Re-Analysis Complete! Updated ${updates.length} episodes.`;
+            let message = `Re-Analysis Complete! Updated ${updatedCount} episodes.`;
             if (failed.length > 0) {
                 message += `\n\nFailed (${failed.length}):\n${failed.join('\n')}`;
             }
@@ -173,34 +171,15 @@ export const MigrationTools = () => {
                     };
                 }) || [];
 
-                // Save to normalized collections
+                // Save to normalized collections using the unified method
                 if (contestantsWithIds.length > 0) {
-                    await StorageService.saveContestants(
-                        contestantsWithIds,
-                        ep.id,
-                        ep.episodeNumber,
-                        ep.episodeTitle
-                    );
-                    totalContestants += contestantsWithIds.length;
-                }
-
-                if (couplesWithIds.length > 0) {
-                    await StorageService.saveCouples(
-                        couplesWithIds,
-                        ep.id,
-                        ep.episodeNumber,
-                        ep.episodeTitle
-                    );
-                    totalCouples += couplesWithIds.length;
-                }
-
-                // Optionally update the analyses document with IDs (for consistency)
-                if (contestantsWithIds.some(c => !ep.contestants?.find(ec => ec.id === c.id))) {
-                    await StorageService.addAnalysis({
+                    await StorageService.fullySaveAnalysis({
                         ...ep,
                         contestants: contestantsWithIds,
                         couples: couplesWithIds
                     });
+                    totalContestants += contestantsWithIds.length;
+                    totalCouples += couplesWithIds.length;
                 }
             }
 

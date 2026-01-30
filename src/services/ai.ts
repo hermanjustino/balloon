@@ -16,8 +16,9 @@ export const AIService = {
         // If you are developing locally, ensure your environment is set up.
         const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 
-        // 1. Generate ID early for ID consistency across collections
-        const id = crypto.randomUUID();
+        // 1. Generate stable ID based on episodeNumber (e.g., "ep_22") for deterministic updates
+        // If no episodeNumber, fall back to random UUID for backwards compatibility
+        const id = episodeNumber ? `ep_${episodeNumber}` : crypto.randomUUID();
 
         const schema: Schema = {
             type: Type.OBJECT,

@@ -100,6 +100,20 @@ export const StorageService = {
         } catch (e) { handleFirestoreError(e, 'addAnalysis'); }
     },
 
+    // Consolidates saving to all 3 collections with "Clear-then-Upsert"
+    fullySaveAnalysis: async (result: AnalysisResult) => {
+        try {
+            await Promise.all([
+                StorageService.addAnalysis(result),
+                StorageService.saveContestants(result.contestants || [], result.id, result.episodeNumber, result.episodeTitle),
+                StorageService.saveCouples(result.couples || [], result.id, result.episodeNumber, result.episodeTitle)
+            ]);
+        } catch (e) {
+            console.error("fullySaveAnalysis failed:", e);
+            throw e;
+        }
+    },
+
     batchUpdateAnalyses: async (updates: AnalysisResult[]) => {
         try {
             // Firestore batches are limited to 500 ops. We'll do them in chunks.
