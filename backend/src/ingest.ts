@@ -18,7 +18,7 @@ const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 const SUPADATA_API_BASE = 'https://api.supadata.ai/v1';
 
 // Matches: "Ep 92: Pop The Balloon..." OR "Ep 90 (Part 1): Pop The Balloon..."
-const EPISODE_TITLE_REGEX = /^Ep\s+(\d+)/i;
+const EPISODE_TITLE_REGEX = /^Ep\s+(\d+)(?:\s*\(Part\s*(\d+)\))?/i;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -102,7 +102,10 @@ async function listRecentEpisodes(channelId: string, maxResults = 10): Promise<Y
  */
 function extractEpisodeNumber(title: string): string | null {
     const match = title.match(EPISODE_TITLE_REGEX);
-    return match ? match[1] : null;
+    if (!match) return null;
+    const num = match[1];
+    const part = match[2];
+    return part ? `${num}_pt${part}` : num;
 }
 
 /**
@@ -167,6 +170,8 @@ async function analyzeTranscript(
             matchesCount: { type: Type.NUMBER, description: 'Number of matches formed' },
             sentiment: { type: Type.STRING, description: 'Overall sentiment: Positive, Negative, Mixed, or Neutral' },
             avgAge: { type: Type.NUMBER, description: 'Average estimated age' },
+            dramaScore: { type: Type.NUMBER, description: '1-10 score of how dramatic/entertaining the episode was' },
+            memorableMoment: { type: Type.STRING, description: 'The single most standout or viral-worthy moment from the episode' },
             couples: {
                 type: Type.ARRAY,
                 description: 'List of couples who successfully matched at the end.',
@@ -204,6 +209,7 @@ async function analyzeTranscript(
                             description: "All jobs/occupations mentioned",
                             items: { type: Type.STRING },
                         },
+                        industry: { type: Type.STRING, description: "Broad industry cluster based on their job (e.g., Healthcare, Tech, Creative, Blue Collar, Professional, Service)" },
                         kids: {
                             type: Type.OBJECT,
                             properties: {
@@ -216,12 +222,14 @@ async function analyzeTranscript(
                         religion: { type: Type.STRING, description: "Religious affiliation if mentioned" },
                         role: { type: Type.STRING, description: "MUST be 'Lineup' or 'Contestant'" },
                         outcome: { type: Type.STRING, description: "Short result: 'Matched', 'Popped', 'Eliminated', 'Walked Away'" },
+                        popReason: { type: Type.STRING, description: 'If popped, the specific reason why (e.g., "Too short", "Has kids", "Job choice")' },
+                        popCategory: { type: Type.STRING, description: 'Category of rejection: Appearance, Lifestyle, Vibe, Location, Dealbreaker, or Other' },
                     },
                     required: ['name', 'gender', 'age', 'location', 'role', 'outcome'],
                 },
             },
         },
-        required: ['episodeTitle', 'matchRate', 'participantCount', 'malePercentage', 'femalePercentage', 'matchesCount', 'sentiment', 'avgAge', 'couples', 'contestants'],
+        required: ['episodeTitle', 'matchRate', 'participantCount', 'malePercentage', 'femalePercentage', 'matchesCount', 'sentiment', 'avgAge', 'couples', 'contestants', 'dramaScore', 'memorableMoment'],
     };
 
     const response = await ai.models.generateContent({
@@ -235,8 +243,11 @@ FORMAT RULES:
 - You MUST identify the gender (Male/Female) for EVERY person. Infer from name/pronouns if necessary.
 - You MUST extract the specific names of couples that matched.
 - Extract job(s), kids info, and religion if mentioned.
+- For each person, infer a broad "industry" cluster from their job title.
+- For anyone who gets "popped", extract the specific reason why and categorize it.
+- Rate the overall episode drama level from 1-10 and identify the most memorable moment.
 
-Extract statistics and the full list of people.
+Extract statistics and any deep insights mentioned in the transcript.
 
 TRANSCRIPT:
 ${transcript}`,
