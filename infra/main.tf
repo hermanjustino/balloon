@@ -9,6 +9,65 @@ provider "google-beta" {
 }
 
 # ============================================================================
+# INGEST PIPELINE
+# Cloud Scheduler → stats-api Cloud Run /ingest/run (daily)
+# ============================================================================
+
+# Enable required APIs
+resource "google_project_service" "youtube" {
+  project            = var.project_id
+  service            = "youtube.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "cloudscheduler" {
+  project            = var.project_id
+  service            = "cloudscheduler.googleapis.com"
+  disable_on_destroy = false
+}
+
+# Dedicated service account for Cloud Scheduler to invoke the ingest endpoint
+resource "google_service_account" "ingest_scheduler" {
+  project      = var.project_id
+  account_id   = "ingest-scheduler-sa"
+  display_name = "Ingest Scheduler Service Account"
+}
+
+# Allow the scheduler SA to invoke Cloud Run services
+resource "google_project_iam_member" "ingest_scheduler_run_invoker" {
+  project = var.project_id
+  role    = "roles/run.invoker"
+  member  = "serviceAccount:${google_service_account.ingest_scheduler.email}"
+}
+
+# Cloud Scheduler job — runs daily at 9 AM UTC
+# Adjust the schedule to match the channel's typical upload cadence
+resource "google_cloud_scheduler_job" "ingest_daily" {
+  project     = var.project_id
+  region      = var.region
+  name        = "balloon-ingest-daily"
+  description = "Triggers the Pop the Balloon episode ingest pipeline daily"
+  schedule    = "0 9 * * *"
+  time_zone   = "UTC"
+
+  http_target {
+    uri         = "${var.stats_api_url}/ingest/run"
+    http_method = "POST"
+    body        = base64encode("{}")
+    headers = {
+      "Content-Type" = "application/json"
+    }
+
+    oidc_token {
+      service_account_email = google_service_account.ingest_scheduler.email
+      audience              = var.stats_api_url
+    }
+  }
+
+  depends_on = [google_project_service.cloudscheduler]
+}
+
+# ============================================================================
 # FIREBASE MODULE
 # Handles: Firebase APIs, Firestore, Auth, Hosting
 # ============================================================================

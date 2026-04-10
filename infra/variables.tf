@@ -16,6 +16,13 @@ variable "region" {
   default     = "us-central1"
 }
 
+# Cloud Run stats-api URL (used by Cloud Scheduler ingest job)
+variable "stats_api_url" {
+  description = "The Cloud Run URL for the stats-api service (e.g. https://stats-api-xxx-uc.a.run.app)"
+  type        = string
+  default     = "https://stats-api-743597976254.us-central1.run.app"
+}
+
 # Domain variables (optional - only needed if using domain module)
 variable "domain_name" {
   description = "Custom domain name"
