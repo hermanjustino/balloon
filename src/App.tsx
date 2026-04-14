@@ -13,6 +13,15 @@ import { LoginForm } from './components/admin/LoginForm';
 import { AdminPanel } from './components/admin/AdminPanel';
 import { LandingPage } from './components/landing/LandingPage';
 import { ContestantSearch } from './components/pages/ContestantSearch';
+import { OutcomeBreakdown } from './components/dashboard/OutcomeBreakdown';
+import { KidsStats } from './components/dashboard/KidsStats';
+import { ReligionChart } from './components/dashboard/ReligionChart';
+import { AgeGapChart } from './components/dashboard/AgeGapChart';
+import { GeoMatchCard } from './components/dashboard/GeoMatchCard';
+import { BestEpisodesTable } from './components/dashboard/BestEpisodesTable';
+import { IndustriesChart } from './components/dashboard/IndustriesChart';
+import { DealbreakersChart } from './components/dashboard/DealbreakersChart';
+import { DramaScoreChart } from './components/dashboard/DramaScoreChart';
 import './styles/index.css';
 
 // --- Main App Logic (Controller) ---
@@ -44,6 +53,17 @@ const App = () => {
     const [recentAnalyses, setRecentAnalyses] = useState<AnalysisResult[]>([]);
     const [locationData, setLocationData] = useState<{ location: string, count: number }[]>([]);
 
+    // New analytics state
+    const [outcomeData, setOutcomeData] = useState<{ role: string; outcome: string; count: number }[]>([]);
+    const [kidsData, setKidsData] = useState<any>(null);
+    const [religionData, setReligionData] = useState<{ religion: string; count: number }[]>([]);
+    const [ageGapData, setAgeGapData] = useState<{ range: string; count: number }[]>([]);
+    const [geoData, setGeoData] = useState<any>(null);
+    const [bestEpisodesData, setBestEpisodesData] = useState<any[]>([]);
+    const [industriesData, setIndustriesData] = useState<any[]>([]);
+    const [dealbreakersData, setDealbreakersData] = useState<any[]>([]);
+    const [dramaData, setDramaData] = useState<any[]>([]);
+
     // Auth Listener
     useEffect(() => {
         // --- DEV ONLY: Expose services for testing ---
@@ -71,14 +91,32 @@ const App = () => {
 
         // 1. Fetch BigQuery Stats (OLAP) - Decoupled
         try {
-            const [statsRes, locations] = await Promise.all([
+            const [statsRes, locations, outcomes, kids, religion, ageGaps, geo, bestEps, industries, dealbreakers, drama] = await Promise.all([
                 StorageService.getStats(activeUser),
-                StorageService.getLocations(activeUser)
+                StorageService.getLocations(activeUser),
+                StorageService.getOutcomes(),
+                StorageService.getKidsStats(),
+                StorageService.getReligion(),
+                StorageService.getAgeGaps(),
+                StorageService.getGeoMatches(),
+                StorageService.getBestEpisodes(),
+                StorageService.getIndustries(),
+                StorageService.getDealbreakers(),
+                StorageService.getDramaScores(),
             ]);
             console.log("✅ App: BigQuery stats received", { metrics: !!statsRes.metrics.episodesAnalyzed });
             setMetrics(statsRes.metrics);
             setDemographics(statsRes.demographics);
             setLocationData(locations);
+            setOutcomeData(outcomes);
+            setKidsData(kids);
+            setReligionData(religion);
+            setAgeGapData(ageGaps);
+            setGeoData(geo);
+            setBestEpisodesData(bestEps);
+            setIndustriesData(industries);
+            setDealbreakersData(dealbreakers);
+            setDramaData(drama);
         } catch (e) {
             console.error("❌ App: BigQuery fetch failed:", e);
         }
@@ -218,13 +256,15 @@ const App = () => {
                         )}
                     </>
                 )}
-                <KeyMetrics metrics={metrics} />
+                <section className="key-metrics-grid" aria-label="Key Metrics">
+                    <KeyMetrics metrics={metrics} />
+                    <KidsStats data={kidsData} />
+                </section>
 
                 <div className="dashboard-grid">
                     <DemographicsChart demographics={demographics} />
                     <div className="demographics-card">
                         <LocationsChart history={recentAnalyses} />
-                        {/* Optional: Add a subtle overlay or toggle for the BigQuery location data if desired */}
                     </div>
                     <AnalysisTable
                         recentAnalyses={recentAnalyses}
@@ -232,6 +272,18 @@ const App = () => {
                         isAdmin={!!(isAuthorized && viewMode === 'admin')}
                         onDelete={handleDeleteEpisode}
                     />
+                </div>
+
+                {/* ── Analytics Section ── */}
+                <div className="dashboard-grid" style={{ marginTop: '1.5rem' }}>
+                    <OutcomeBreakdown data={outcomeData} />
+                    <ReligionChart data={religionData} />
+                    <AgeGapChart data={ageGapData} />
+                    <GeoMatchCard data={geoData} />
+                    <BestEpisodesTable data={bestEpisodesData} />
+                    <IndustriesChart data={industriesData} />
+                    <DealbreakersChart data={dealbreakersData} />
+                    <DramaScoreChart data={dramaData} />
                 </div>
 
                 {/* Navigation to Search Page (Admin only) */}

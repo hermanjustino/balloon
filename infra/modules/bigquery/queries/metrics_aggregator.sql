@@ -15,7 +15,7 @@ contestant_stats AS (
     AVG(CAST(age AS FLOAT64)) as avg_age,
     COUNTIF(LOWER(gender) = 'male') as male_count,
     COUNTIF(LOWER(gender) = 'female') as female_count,
-    COUNT(DISTINCT episode_id) as episodes_count
+    COUNT(DISTINCT REGEXP_REPLACE(episode_id, r'_pt\d+$', '')) as episodes_count
   FROM contestant_data
 ),
 couple_stats AS (

@@ -13,6 +13,7 @@
         }
     ],
     "hosting": {
+        "site": "balloon-87473",
         "public": "dist",
         "ignore": [
             "firebase.json",

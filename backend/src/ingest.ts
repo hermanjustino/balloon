@@ -151,7 +151,7 @@ async function fetchCaptions(videoId: string): Promise<string> {
 // Gemini analysis (mirrors frontend AIService.analyzeTranscript)
 // ---------------------------------------------------------------------------
 
-async function analyzeTranscript(
+export async function analyzeTranscript(
     transcript: string,
     episodeNumber: string,
     videoUrl: string,

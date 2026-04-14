@@ -82,6 +82,82 @@ export const StorageService = {
 
     // demographics and matchData are now powered by BigQuery via getStats()
 
+    // -----------------------------------------------------------------------
+    // New analytics endpoints (Phase 1 + 2)
+    // -----------------------------------------------------------------------
+
+    getOutcomes: async (): Promise<{ role: string; outcome: string; count: number }[]> => {
+        try {
+            const res = await fetch(`${STATS_API_URL}/outcomes`);
+            if (!res.ok) throw new Error(res.statusText);
+            return res.json();
+        } catch (e) { console.error('getOutcomes failed:', e); return []; }
+    },
+
+    getKidsStats: async (): Promise<{ totalWithData: number; hasKidsCount: number; pctWithKids: number; avgKidCount: number | null } | null> => {
+        try {
+            const res = await fetch(`${STATS_API_URL}/kids`);
+            if (!res.ok) throw new Error(res.statusText);
+            return res.json();
+        } catch (e) { console.error('getKidsStats failed:', e); return null; }
+    },
+
+    getReligion: async (): Promise<{ religion: string; count: number }[]> => {
+        try {
+            const res = await fetch(`${STATS_API_URL}/religion`);
+            if (!res.ok) throw new Error(res.statusText);
+            return res.json();
+        } catch (e) { console.error('getReligion failed:', e); return []; }
+    },
+
+    getAgeGaps: async (): Promise<{ range: string; count: number }[]> => {
+        try {
+            const res = await fetch(`${STATS_API_URL}/age-gaps`);
+            if (!res.ok) throw new Error(res.statusText);
+            return res.json();
+        } catch (e) { console.error('getAgeGaps failed:', e); return []; }
+    },
+
+    getGeoMatches: async (): Promise<{ sameState: number; diffState: number; unknownState: number; total: number; pctSameState: number } | null> => {
+        try {
+            const res = await fetch(`${STATS_API_URL}/geo-matches`);
+            if (!res.ok) throw new Error(res.statusText);
+            return res.json();
+        } catch (e) { console.error('getGeoMatches failed:', e); return null; }
+    },
+
+    getBestEpisodes: async (): Promise<{ episodeNumber: string; episodeTitle: string; matchRate: number | null; dramaScore: number | null; videoUrl: string }[]> => {
+        try {
+            const res = await fetch(`${STATS_API_URL}/best-episodes`);
+            if (!res.ok) throw new Error(res.statusText);
+            return res.json();
+        } catch (e) { console.error('getBestEpisodes failed:', e); return []; }
+    },
+
+    getIndustries: async (): Promise<{ industry: string; total: number; matched: number; matchRate: number | null }[]> => {
+        try {
+            const res = await fetch(`${STATS_API_URL}/industries`);
+            if (!res.ok) throw new Error(res.statusText);
+            return res.json();
+        } catch (e) { console.error('getIndustries failed:', e); return []; }
+    },
+
+    getDealbreakers: async (): Promise<{ category: string; reason: string; count: number }[]> => {
+        try {
+            const res = await fetch(`${STATS_API_URL}/dealbreakers`);
+            if (!res.ok) throw new Error(res.statusText);
+            return res.json();
+        } catch (e) { console.error('getDealbreakers failed:', e); return []; }
+    },
+
+    getDramaScores: async (): Promise<{ episodeNumber: string; episodeTitle: string; dramaScore: number | null; memorableMoment: string }[]> => {
+        try {
+            const res = await fetch(`${STATS_API_URL}/drama`);
+            if (!res.ok) throw new Error(res.statusText);
+            return res.json();
+        } catch (e) { console.error('getDramaScores failed:', e); return []; }
+    },
+
     getHistory: async (): Promise<AnalysisResult[]> => {
         try {
             const q = query(collection(db, "analyses"), orderBy("dateAnalyzed", "desc"));
