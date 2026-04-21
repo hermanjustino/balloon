@@ -32,3 +32,10 @@ dist-ssr
 
 # Environment Variables
 .env
+
+# Generated outputs
+backend/output_cards/
+
+# Firebase build cache
+.firebase/
+backend/.env
