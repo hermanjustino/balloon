@@ -13,6 +13,7 @@ import {
     getIndustries,
     getDealbreakers,
     getDramaScores,
+    getAgeMatchRate,
 } from './stats-queries';
 
 admin.initializeApp({ projectId: process.env.PROJECT_ID || 'balloon-87473' });
@@ -250,6 +251,22 @@ app.get('/api/stats/drama', async (req, res) => {
         })));
     } catch (e: any) {
         console.error('Error fetching drama scores:', e);
+        res.status(500).json({ error: 'Internal Server Error', details: e.message });
+    }
+});
+
+// 13. Age Match Rates
+app.get('/api/stats/age-match', async (req, res) => {
+    try {
+        const rows = await getAgeMatchRate();
+        res.json(rows.map(r => ({
+            age:       Number(r.age),
+            total:     Number(r.total),
+            matched:   Number(r.matched),
+            matchRate: r.match_rate != null ? Number(r.match_rate) : null,
+        })));
+    } catch (e: any) {
+        console.error('Error fetching age match rates:', e);
         res.status(500).json({ error: 'Internal Server Error', details: e.message });
     }
 });

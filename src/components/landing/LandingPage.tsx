@@ -1,69 +1,115 @@
 import React from 'react';
+import { ContestantsMap } from './ContestantsMap';
 
 interface LandingPageProps {
     onEnterDashboard: () => void;
+    stateData?: Record<string, number>;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onEnterDashboard }) => {
+const BalloonSVG: React.FC = () => (
+    <svg
+        viewBox="0 0 120 190"
+        className="balloon-svg"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+    >
+        <ellipse cx="60" cy="73" rx="52" ry="60" fill="#C13111" />
+        <path d="M50 128 Q55 148 60 153 Q65 148 70 128" fill="#C13111" />
+        <ellipse cx="38" cy="47" rx="14" ry="20" fill="rgba(255,255,255,0.22)" transform="rotate(-20 38 47)" />
+        <ellipse cx="74" cy="44" rx="6" ry="9" fill="rgba(255,255,255,0.10)" transform="rotate(-15 74 44)" />
+        <circle cx="60" cy="156" r="5.5" fill="#8B210A" />
+        <path d="M60 162 C50 172 70 180 60 188" stroke="#6D4C41" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+    </svg>
+);
+
+const TOPICS = [
+    {
+        label: 'Location',
+        description: 'Does where you\'re from affect your chances? See which cities and states produce the most matches.',
+    },
+    {
+        label: 'Occupation',
+        description: 'Nurses, teachers, entrepreneurs — which professions show up most, and who actually gets matched?',
+    },
+    {
+        label: 'Age',
+        description: 'How big is the typical age gap between matched couples, and does age predict who gets popped first?',
+    },
+    {
+        label: 'Demographics',
+        description: 'A breakdown of who participates — gender, background, and how the lineup composition shifts by season.',
+    },
+    {
+        label: 'Outcomes',
+        description: 'Match, pop, or walk away. What percentage of each role ends the episode with a connection?',
+    },
+    {
+        label: 'Drama Score',
+        description: 'Some episodes are calm, others are chaos. We score each one by how much tension shows up in the transcript.',
+    },
+];
+
+export const LandingPage: React.FC<LandingPageProps> = ({ onEnterDashboard, stateData = {} }) => {
+    const scrollToExplore = (e: React.MouseEvent) => {
+        e.preventDefault();
+        document.getElementById('explore')?.scrollIntoView({ behavior: 'smooth' });
+    };
+
     return (
         <div className="landing-page">
             <nav className="landing-nav">
                 <div className="nav-brand">LuvLytics</div>
-                <a href="mailto:hejustino@hjdconsulting.ca" className="nav-link">Contact</a>
+                <div className="nav-links">
+                    <a href="#explore" className="nav-link" onClick={scrollToExplore}>
+                        About
+                    </a>
+                    <button className="nav-cta" onClick={onEnterDashboard}>
+                        All Trends
+                    </button>
+                </div>
             </nav>
 
-            <main className="landing-hero">
-                <div className="hero-content">
-                    <h1 className="hero-title">
-                        Data-Driven Insights for
-                        <span className="highlight"> Reality Dating Shows</span>
-                    </h1>
-                    <p className="hero-subtitle">
-                        AI-powered analysis of contestant behavior, match predictions, and demographic trends.
-                        Transforming entertainment into actionable insights.
+            <section className="landing-hero">
+                <h1 className="hero-title">
+                    Dating Trends,<br />
+                    <em>Decoded</em>
+                </h1>
+                <div className="balloon-container">
+                    <BalloonSVG />
+                </div>
+                <p className="hero-subtitle">
+                    Ever watched an episode and wondered if your read on the room was actually right?
+                    We track every outcome so you can see how the numbers compare to what the contestants claim.
+                </p>
+            </section>
+
+            {Object.keys(stateData).length > 0 && (
+                <ContestantsMap stateData={stateData} />
+            )}
+
+            <section className="topics-intro" id="explore">
+                <div className="topics-intro-inner">
+                    <p className="section-eyebrow">What We Track</p>
+                    <h2 className="topics-heading">
+                        The questions fans actually ask
+                    </h2>
+                    <p className="topics-subtext">
+                        Browse the data by what matters to you — where contestants come from,
+                        what they do for work, how ages line up, and more.
                     </p>
+                </div>
 
-                    <div className="hero-cta">
-                        <button className="cta-primary" onClick={onEnterDashboard}>
-                            View Pop the Balloon Data
+                <div className="topics-grid">
+                    {TOPICS.map(topic => (
+                        <button
+                            key={topic.label}
+                            className="topic-card"
+                            onClick={onEnterDashboard}
+                        >
+                            <span className="topic-label">{topic.label}</span>
+                            <span className="topic-desc">{topic.description}</span>
                         </button>
-                    </div>
-                </div>
-
-                <div className="hero-stats">
-                    <div className="stat-item">
-                        <span className="stat-value">AI</span>
-                        <span className="stat-label">Powered Analysis</span>
-                    </div>
-                    <div className="stat-item">
-                        <span className="stat-value">Real-Time</span>
-                        <span className="stat-label">Data Updates</span>
-                    </div>
-                    <div className="stat-item">
-                        <span className="stat-value">Public</span>
-                        <span className="stat-label">Access</span>
-                    </div>
-                </div>
-            </main>
-
-            <section className="landing-features">
-                <h2 className="section-heading">What We Analyze</h2>
-                <div className="features-grid">
-                    <div className="feature-card">
-                        <div className="feature-icon">M</div>
-                        <h3>Match Rates</h3>
-                        <p>Track which episodes produce the most successful connections and identify patterns in compatibility.</p>
-                    </div>
-                    <div className="feature-card">
-                        <div className="feature-icon">D</div>
-                        <h3>Demographics</h3>
-                        <p>Understand the age, gender, and profession breakdown of contestants across all episodes.</p>
-                    </div>
-                    <div className="feature-card">
-                        <div className="feature-icon">S</div>
-                        <h3>Sentiment</h3>
-                        <p>AI-driven sentiment analysis of conversations and interactions during each episode.</p>
-                    </div>
+                    ))}
                 </div>
             </section>
 

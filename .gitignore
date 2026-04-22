@@ -39,3 +39,5 @@ backend/output_cards/
 # Firebase build cache
 .firebase/
 backend/.env
+
+**/youtube_cookies.txt

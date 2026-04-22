@@ -53,8 +53,8 @@ export async function getKidsStats() {
     const r = rows[0];
     return {
         totalWithData: Number(r.total_with_data),
-        hasKidsCount:  Number(r.has_kids_count),
-        pctWithKids:   r.total_with_data > 0
+        hasKidsCount: Number(r.has_kids_count),
+        pctWithKids: r.total_with_data > 0
             ? Math.round((Number(r.has_kids_count) / Number(r.total_with_data)) * 100)
             : 0,
         avgKidCount: r.avg_kid_count != null ? Number(r.avg_kid_count) : null,
@@ -173,10 +173,10 @@ export async function getGeoMatches() {
     const r = rows[0];
     const known = Number(r.same_state) + Number(r.diff_state);
     return {
-        sameState:    Number(r.same_state),
-        diffState:    Number(r.diff_state),
+        sameState: Number(r.same_state),
+        diffState: Number(r.diff_state),
         unknownState: Number(r.unknown_state),
-        total:        Number(r.total),
+        total: Number(r.total),
         pctSameState: known > 0 ? Math.round((Number(r.same_state) / known) * 100) : 0,
     };
 }
@@ -288,5 +288,29 @@ export async function getDramaScores() {
         WHERE JSON_VALUE(data, '$.dramaScore') IS NOT NULL
         ORDER BY drama_score DESC
         LIMIT 20
+    `);
+}
+
+// ---------------------------------------------------------------------------
+// Age Match Rates
+// ---------------------------------------------------------------------------
+export async function getAgeMatchRate() {
+    return q(`
+        SELECT
+            SAFE_CAST(JSON_VALUE(data, '$.age') AS INT64) AS age,
+            COUNT(*) AS total,
+            COUNTIF(JSON_VALUE(data, '$.outcome') = 'Matched') AS matched,
+            ROUND(SAFE_DIVIDE(
+                COUNTIF(JSON_VALUE(data, '$.outcome') = 'Matched') * 100.0,
+                COUNT(*)
+            ), 1) AS match_rate
+        FROM ${DS}.contestants_raw_latest
+        WHERE SAFE_CAST(JSON_VALUE(data, '$.age') AS INT64) BETWEEN 18 AND 65
+          AND JSON_VALUE(data, '$.role') IN ('Lineup', 'Contestant')
+          AND JSON_VALUE(data, '$.outcome') IS NOT NULL
+          AND JSON_VALUE(data, '$.outcome') NOT IN ('Host', 'No Match')
+        GROUP BY age
+        HAVING total >= 3
+        ORDER BY age
     `);
 }

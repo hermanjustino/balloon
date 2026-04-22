@@ -158,6 +158,14 @@ export const StorageService = {
         } catch (e) { console.error('getDramaScores failed:', e); return []; }
     },
 
+    getAgeMatchRates: async (): Promise<{ age: number; total: number; matched: number; matchRate: number | null }[]> => {
+        try {
+            const res = await fetch(`${STATS_API_URL}/age-match`);
+            if (!res.ok) throw new Error(res.statusText);
+            return res.json();
+        } catch (e) { console.error('getAgeMatchRates failed:', e); return []; }
+    },
+
     getHistory: async (): Promise<AnalysisResult[]> => {
         try {
             const q = query(collection(db, "analyses"), orderBy("dateAnalyzed", "desc"));

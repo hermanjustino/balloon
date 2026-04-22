@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { StorageService, AIService, AuthService } from './services';
 import { AnalysisResult, Metrics, Demographics, MatchDataPoint } from './types';
 import { User } from 'firebase/auth';
@@ -12,6 +12,7 @@ import { LocationsChart } from './components/dashboard/LocationsChart';
 import { LoginForm } from './components/admin/LoginForm';
 import { AdminPanel } from './components/admin/AdminPanel';
 import { LandingPage } from './components/landing/LandingPage';
+import { normalizeStateToAbbr } from './components/landing/ContestantsMap';
 import { ContestantSearch } from './components/pages/ContestantSearch';
 import { OutcomeBreakdown } from './components/dashboard/OutcomeBreakdown';
 import { KidsStats } from './components/dashboard/KidsStats';
@@ -22,6 +23,7 @@ import { BestEpisodesTable } from './components/dashboard/BestEpisodesTable';
 import { IndustriesChart } from './components/dashboard/IndustriesChart';
 import { DealbreakersChart } from './components/dashboard/DealbreakersChart';
 import { DramaScoreChart } from './components/dashboard/DramaScoreChart';
+import { AgeMatchChart } from './components/dashboard/AgeMatchChart';
 import './styles/index.css';
 
 // --- Main App Logic (Controller) ---
@@ -63,6 +65,7 @@ const App = () => {
     const [industriesData, setIndustriesData] = useState<any[]>([]);
     const [dealbreakersData, setDealbreakersData] = useState<any[]>([]);
     const [dramaData, setDramaData] = useState<any[]>([]);
+    const [ageMatchData, setAgeMatchData] = useState<any[]>([]);
 
     // Auth Listener
     useEffect(() => {
@@ -91,7 +94,7 @@ const App = () => {
 
         // 1. Fetch BigQuery Stats (OLAP) - Decoupled
         try {
-            const [statsRes, locations, outcomes, kids, religion, ageGaps, geo, bestEps, industries, dealbreakers, drama] = await Promise.all([
+            const [statsRes, locations, outcomes, kids, religion, ageGaps, geo, bestEps, industries, dealbreakers, drama, ageMatches] = await Promise.all([
                 StorageService.getStats(activeUser),
                 StorageService.getLocations(activeUser),
                 StorageService.getOutcomes(),
@@ -103,6 +106,7 @@ const App = () => {
                 StorageService.getIndustries(),
                 StorageService.getDealbreakers(),
                 StorageService.getDramaScores(),
+                StorageService.getAgeMatchRates(),
             ]);
             console.log("✅ App: BigQuery stats received", { metrics: !!statsRes.metrics.episodesAnalyzed });
             setMetrics(statsRes.metrics);
@@ -117,6 +121,7 @@ const App = () => {
             setIndustriesData(industries);
             setDealbreakersData(dealbreakers);
             setDramaData(drama);
+            setAgeMatchData(ageMatches);
         } catch (e) {
             console.error("❌ App: BigQuery fetch failed:", e);
         }
@@ -200,9 +205,27 @@ const App = () => {
         }
     };
 
+    const stateContestantCounts = useMemo(() => {
+        const map: Record<string, number> = {};
+        recentAnalyses.forEach(analysis => {
+            analysis.contestants?.forEach(c => {
+                let raw = '';
+                if (typeof c.location === 'object' && c.location !== null) {
+                    raw = c.location.state || '';
+                } else if (typeof c.location === 'string') {
+                    const parts = c.location.split(',');
+                    raw = parts.length > 1 ? parts[parts.length - 1].trim() : parts[0].trim();
+                }
+                const abbr = normalizeStateToAbbr(raw);
+                if (abbr) map[abbr] = (map[abbr] || 0) + 1;
+            });
+        });
+        return map;
+    }, [recentAnalyses]);
+
     // Show landing page first
     if (showLanding) {
-        return <LandingPage onEnterDashboard={() => setShowLanding(false)} />;
+        return <LandingPage onEnterDashboard={() => setShowLanding(false)} stateData={stateContestantCounts} />;
     }
 
     // Show Contestant Search page (Admin only)
@@ -279,6 +302,7 @@ const App = () => {
                     <OutcomeBreakdown data={outcomeData} />
                     <ReligionChart data={religionData} />
                     <AgeGapChart data={ageGapData} />
+                    <AgeMatchChart data={ageMatchData} />
                     <GeoMatchCard data={geoData} />
                     <BestEpisodesTable data={bestEpisodesData} />
                     <IndustriesChart data={industriesData} />
