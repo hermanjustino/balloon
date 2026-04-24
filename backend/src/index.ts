@@ -2,7 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import * as admin from 'firebase-admin';
 import { BigQuery } from '@google-cloud/bigquery';
-import { runIngest } from './ingest';
+import { runIngest, analyzeTranscript } from './ingest';
+import { GoogleGenAI, Type } from '@google/genai';
 import {
     getOutcomes,
     getKidsStats,
@@ -271,8 +272,75 @@ app.get('/api/stats/age-match', async (req, res) => {
     }
 });
 
+// Analyze transcript — admin only, key never leaves server
+app.post('/api/analyze', async (req, res) => {
+    const { transcript, episodeNumber, videoUrl } = req.body;
+    if (!transcript) return res.status(400).json({ error: 'transcript is required' });
+    const epNum = String(episodeNumber || 'unknown');
+    const epId = episodeNumber ? `ep_${episodeNumber}` : admin.firestore().collection('_').doc().id;
+    try {
+        const result = await analyzeTranscript(transcript, epNum, videoUrl || '', epId);
+        res.json(result);
+    } catch (err: any) {
+        console.error('[ANALYZE] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Refine locations — admin only, uses Flash model (cheap)
+app.post('/api/refine-locations', async (req, res) => {
+    const { contestants } = req.body;
+    if (!Array.isArray(contestants)) return res.status(400).json({ error: 'contestants array required' });
+
+    const itemsToRefine = contestants.filter((c: any) => {
+        if (typeof c.location === 'string') return true;
+        if (typeof c.location === 'object') return !c.location.state || c.location.state === 'Unknown' || c.location.state === '';
+        return false;
+    });
+    if (itemsToRefine.length === 0) return res.json(contestants);
+
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+    const prompt = `Parse these locations into City and State. Infer State from City if missing (e.g. Miami -> FL).
+LOCATIONS: ${JSON.stringify(itemsToRefine.map((c: any) => typeof c.location === 'string' ? c.location : c.location.original || c.location.city))}
+Return JSON array with objects: { original, city, state, country }`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            original: { type: Type.STRING },
+                            city: { type: Type.STRING },
+                            state: { type: Type.STRING },
+                            country: { type: Type.STRING },
+                        },
+                        required: ['original', 'city', 'state'],
+                    },
+                },
+            },
+        });
+        const parsedLocations = JSON.parse(response.text ?? '[]') as any[];
+        const refined = contestants.map((c: any) => {
+            if (!itemsToRefine.includes(c)) return c;
+            const key = typeof c.location === 'string' ? c.location : (c.location.original || c.location.city);
+            const match = parsedLocations.find((p: any) => p.original === key);
+            return match ? { ...c, location: { city: match.city, state: match.state, country: match.country || 'US', original: key } } : c;
+        });
+        res.json(refined);
+    } catch (err: any) {
+        console.error('[REFINE-LOCATIONS] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Health Check (Public, no auth)
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
     res.json({ status: 'ok', project: PROJECT_ID });
 });
 

@@ -1,260 +1,65 @@
-import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
+import { AuthService } from "./auth";
 import { AnalysisResult } from "../types";
 
-/* 
+/*
   -----------------------------------------------------------------------
   AI SERVICE
-  Handles Gemini API interaction.
+  Proxies Gemini calls through the backend so the API key never touches
+  the browser bundle.
   -----------------------------------------------------------------------
 */
 
+async function authHeaders(): Promise<Record<string, string>> {
+    const user = AuthService.getCurrentUser();
+    if (!user) throw new Error('Not authenticated');
+    const token = await user.getIdToken();
+    return { 'Content-Type': 'application/json', 'X-Firebase-Auth': token };
+}
+
 export const AIService = {
     analyzeTranscript: async (transcript: string, episodeNumber?: string, videoUrl?: string): Promise<AnalysisResult> => {
-        // API KEY MUST be import.meta.env.VITE_API_KEY. 
-        // If you are developing locally, ensure your environment is set up.
-        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
-
-        // 1. Generate stable ID based on episodeNumber (e.g., "ep_22") for deterministic updates
-        // If no episodeNumber, fall back to random UUID for backwards compatibility
-        const id = episodeNumber ? `ep_${episodeNumber}` : crypto.randomUUID();
-
-        const schema: Schema = {
-            type: Type.OBJECT,
-            properties: {
-                episodeTitle: { type: Type.STRING, description: "A short catchy title for this episode." },
-                matchRate: { type: Type.NUMBER, description: "Percentage of couples who matched (0-100)" },
-                participantCount: { type: Type.NUMBER, description: "Total number of participants" },
-                malePercentage: { type: Type.NUMBER, description: "Percentage of male participants (0-100)" },
-                femalePercentage: { type: Type.NUMBER, description: "Percentage of female participants (0-100)" },
-                matchesCount: { type: Type.NUMBER, description: "Number of matches formed" },
-                sentiment: { type: Type.STRING, description: "Overall sentiment: Positive, Negative, Mixed, or Neutral" },
-                avgAge: { type: Type.NUMBER, description: "Average estimated age" },
-                couples: {
-                    type: Type.ARRAY,
-                    description: "List of couples who successfully matched at the end.",
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            person1: { type: Type.STRING, description: "Name of the person from the Lineup" },
-                            person2: { type: Type.STRING, description: "Name of the Contestant they matched with" }
-                        },
-                        required: ["person1", "person2"]
-                    }
-                },
-                contestants: {
-                    type: Type.ARRAY,
-                    description: "List of every person mentioned. CRITICAL: Distinguish between 'Lineup' (balloon holders) and 'Contestant' (person entering).",
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            name: { type: Type.STRING, description: "Name of the person" },
-                            gender: { type: Type.STRING, description: "Gender of the person: 'Male' or 'Female' (INFER from name/pronouns if not explicitly stated)." },
-                            age: { type: Type.STRING, description: "Age (e.g. '24', 'Unknown')" },
-                            location: {
-                                type: Type.OBJECT,
-                                description: "Split location into components. Use standard 2-letter state codes (e.g. TX, CA, NY).",
-                                properties: {
-                                    city: { type: Type.STRING, description: "City name" },
-                                    state: { type: Type.STRING, description: "State/Province code (e.g. TX, CA)" },
-                                    country: { type: Type.STRING, description: "Country code (default US)" },
-                                    original: { type: Type.STRING, description: "The original raw location string from the transcript" }
-                                },
-                                required: ["city", "state", "original"]
-                            },
-                            job: { type: Type.STRING, description: "Primary job title (legacy field)" },
-                            jobs: {
-                                type: Type.ARRAY,
-                                description: "All jobs/occupations mentioned (e.g. ['Model', 'Bartender'])",
-                                items: { type: Type.STRING }
-                            },
-                            kids: {
-                                type: Type.OBJECT,
-                                description: "Children info if mentioned",
-                                properties: {
-                                    hasKids: { type: Type.BOOLEAN, description: "Whether they have kids" },
-                                    count: { type: Type.NUMBER, description: "Number of children" },
-                                    ages: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Ages of children if mentioned" }
-                                },
-                                required: ["hasKids"]
-                            },
-                            religion: { type: Type.STRING, description: "Religious affiliation if mentioned (e.g. 'Christian', 'Muslim', 'Spiritual')" },
-                            role: { type: Type.STRING, description: "MUST be either 'Lineup' (holding balloon) or 'Contestant' (walking in to find match)." },
-                            outcome: { type: Type.STRING, description: "Short result: 'Matched', 'Popped', 'Eliminated', 'Walked Away'" }
-                        },
-                        required: ["name", "gender", "age", "location", "role", "outcome"]
-                    }
-                }
-            },
-            required: ["episodeTitle", "matchRate", "participantCount", "malePercentage", "femalePercentage", "matchesCount", "sentiment", "avgAge", "couples", "contestants"]
-        };
-
-        const epContext = episodeNumber ? `This is Episode ${episodeNumber}.` : "";
-
-        // 2. Perform AI Analysis
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: `Analyze the following transcript from the dating show "Pop the Balloon". ${epContext}
-      
-      FORMAT RULES:
-      - The show has a "Lineup" of people holding balloons.
-      - "Contestants" come out one by one to face the Lineup.
-      - You MUST classify every person as either "Lineup" or "Contestant".
-      - You MUST identify the gender (Male/Female) for EVERY person. Infer from name/pronouns if necessary.
-      - You MUST extract the specific names of couples that matched.
-      - Extract job(s), kids info, and religion if mentioned.
-      
-      Extract statistics and the full list of people.
-      
-      TRANSCRIPT:
-      ${transcript}`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: schema
-            }
+        const headers = await authHeaders();
+        const response = await fetch('/api/analyze', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ transcript, episodeNumber, videoUrl }),
         });
-
-        let jsonString = response.text;
-        // Strip markdown code blocks if present
-        if (jsonString.includes("```json")) {
-            jsonString = jsonString.replace(/```json/g, "").replace(/```/g, "");
-        } else if (jsonString.includes("```")) {
-            jsonString = jsonString.replace(/```/g, "");
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ error: response.statusText }));
+            throw new Error(err.error || 'Analyze request failed');
         }
+        const result = await response.json();
 
-        let result;
+        // Save transcript to Firestore directly (uses Firebase Auth, not API key)
         try {
-            result = JSON.parse(jsonString);
-        } catch (parseError) {
-            console.error("JSON Parse Error:", parseError);
-            throw new Error("Failed to parse AI response.");
-        }
-
-        // 2.5 Generate stable IDs for contestants and match couples to IDs
-        const contestantsWithIds = result.contestants?.map((c: any) => ({
-            ...c,
-            id: crypto.randomUUID()  // Generate unique ID for each contestant
-        })) || [];
-
-        // Match couple names to contestant IDs
-        const couplesWithIds = result.couples?.map((couple: any) => {
-            const c1 = contestantsWithIds.find((c: any) => c.name === couple.person1);
-            const c2 = contestantsWithIds.find((c: any) => c.name === couple.person2);
-
-            return {
-                ...couple,
-                contestant1Id: c1?.id || null,
-                contestant2Id: c2?.id || null
-            };
-        }) || [];
-
-        // 3. Upload Transcript to Firestore 'transcripts' collection
-        // This avoids CORS issues associated with 'uploadString' to Cloud Storage
-        // We now include metadata (Episode Title, Number) to easily associate the transcript in the DB console.
-        try {
-            await setDoc(doc(db, "transcripts", id), {
+            await setDoc(doc(db, "transcripts", result.id), {
                 content: transcript,
                 episodeTitle: result.episodeTitle,
                 episodeNumber: episodeNumber || "N/A",
                 videoUrl: videoUrl || "",
-                analysisId: id,
+                analysisId: result.id,
                 createdAt: new Date().toISOString()
             });
         } catch (uploadError) {
             console.error("Failed to save transcript to Firestore:", uploadError);
-            // We do not throw here to allow the analysis to be saved even if the full text backup fails.
         }
 
-        // 4. Return combined result with IDs
-        return {
-            ...result,
-            contestants: contestantsWithIds,
-            couples: couplesWithIds,
-            id: id,
-            dateAnalyzed: new Date().toISOString().split('T')[0],
-            episodeNumber: episodeNumber || null,
-            videoUrl: videoUrl || null,
-            hasTranscript: true // Flag to tell UI to fetch from 'transcripts' collection
-        };
+        return result as AnalysisResult;
     },
 
-    // NEW: Migration Helper
     refineLocations: async (contestants: { name: string, location: string | { city: string, state: string, original: string } }[]): Promise<any[]> => {
-        // Filter those that are strings OR incomplete objects (missing state/Unknown)
-        const itemsToRefine = contestants.filter(c => {
-            if (typeof c.location === 'string') return true;
-            if (typeof c.location === 'object') {
-                return !c.location.state || c.location.state === 'Unknown' || c.location.state === '';
-            }
-            return false;
+        const headers = await authHeaders();
+        const response = await fetch('/api/refine-locations', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ contestants }),
         });
-
-        if (itemsToRefine.length === 0) return contestants;
-
-        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
-
-        // Define simple schema for just location parsing
-        const locationSchema: Schema = {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    original: { type: Type.STRING, description: "The original location string provided" },
-                    city: { type: Type.STRING },
-                    state: { type: Type.STRING, description: "2-letter state code. INFER if possible (e.g. Miami -> FL)." },
-                    country: { type: Type.STRING, description: "Country code (default US)" }
-                },
-                required: ["original", "city", "state"]
-            }
-        };
-
-        const prompt = `Parse these locations into City and State objects.
-        If the State is missing, use your knowledge to INFER it from the City (e.g. "Chicago" -> "IL", "Miami" -> "FL").
-        
-        LOCATIONS TO PROCESS:
-        ${JSON.stringify(itemsToRefine.map(c => typeof c.location === 'string' ? c.location : c.location.original || c.location.city))}
-        `;
-
-        try {
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-pro',
-                contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: locationSchema
-                }
-            });
-
-            const parsedLocations = JSON.parse(response.text) as any[];
-
-            // Merge back into original array
-            return contestants.map(c => {
-                // If this wasn't in our refine list, return as is
-                const wasRefined = itemsToRefine.includes(c);
-                if (!wasRefined) return c;
-
-                // Find match based on the input string we sent
-                const originalKey = typeof c.location === 'string' ? c.location : (c.location.original || c.location.city);
-                const match = parsedLocations.find(p => p.original === originalKey);
-
-                if (match) {
-                    return {
-                        ...c,
-                        location: {
-                            city: match.city,
-                            state: match.state,
-                            country: match.country || 'US',
-                            original: originalKey as string
-                        }
-                    };
-                }
-                return c; // Fallback if AI missed one
-            });
-
-        } catch (e) {
-            console.error("Migration failed for batch:", e);
-            return contestants; // Fail safe, return original
+        if (!response.ok) {
+            console.error('refineLocations request failed:', response.statusText);
+            return contestants;
         }
-    }
+        return response.json();
+    },
 };

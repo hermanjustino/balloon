@@ -254,6 +254,7 @@ ${transcript}`,
         config: {
             responseMimeType: 'application/json',
             responseSchema: schema,
+            thinkingConfig: { thinkingBudget: 2048 },
         },
     });
 
