@@ -27,7 +27,6 @@ We have implemented a robust "Clear-then-Upsert" architecture with deterministic
 - **File**: `docker-compose.yml`
 - **Changes**:
     - Mapped frontend to port **3000**.
-    - Mounted `.env` file to the frontend container to expose `VITE_API_KEY`.
     - Integrated with local `gcloud` credentials for BigQuery access.
 
 ## 🧹 Cleanup Operations Performed

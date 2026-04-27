@@ -7,7 +7,7 @@ import { Storage } from '@google-cloud/storage';
 
 const SUPADATA_API_BASE = 'https://api.supadata.ai/v1';
 const SUPADATA_API_KEY  = process.env.SUPADATA_API_KEY || '';
-const GEMINI_API_KEY    = process.env.GEMINI_API_KEY || process.env.VITE_API_KEY || '';
+const GEMINI_API_KEY    = process.env.GEMINI_API_KEY || '';
 const YTDLP_PATH        = process.env.YTDLP_PATH || 'yt-dlp';
 const PROJECT_ID        = process.env.PROJECT_ID  || 'balloon-87473';
 const BUCKET_NAME       = process.env.GCS_BUCKET  || 'balloon-87473.firebasestorage.app';

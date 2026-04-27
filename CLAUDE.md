@@ -56,13 +56,12 @@ Copy `.env` at the root for local dev (no `.env.example` exists — check git hi
 
 | Variable | Used by |
 |---|---|
-| `VITE_API_KEY` / `GEMINI_API_KEY` | Frontend AI service + backend ingest (Gemini) |
+| `GEMINI_API_KEY` | Backend ingest (Gemini analysis) — **SECRET** |
 | `VITE_ADMIN_EMAIL` | Frontend auth gate |
-| `VITE_FIREBASE_*` | Firebase SDK init |
+| `VITE_FIREBASE_*` | Firebase SDK init (safe for frontend) |
 | `ADMIN_EMAIL` | Backend auth middleware |
 | `PROJECT_ID` | Backend BigQuery client |
 | `YOUTUBE_API_KEY` | Backend ingest: YouTube Data API v3 channel polling |
-| `GEMINI_API_KEY` | Backend ingest: Gemini analysis (server-side) |
 | `CHANNEL_HANDLE` | Backend ingest: YouTube channel handle (default: `PopTheBalloon`) |
 | `SCHEDULER_SERVICE_ACCOUNT` | Backend ingest: expected OIDC email from Cloud Scheduler |
 

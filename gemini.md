@@ -30,9 +30,9 @@ The app uses Gemini 2.5 Flash with a strict JSON Response Schema.
 - **Security Rules**: The app requires specific Firestore rules (provided in the SetupGuide modal) to allow public reading of stats while restricting `transcripts` and `balloon_data` writes to the verified admin.
 - **State Management**: The dashboard calculates "Global Stats" (Metrics/Demographics) incrementally when a new episode is added. However, when an episode is deleted, the App component triggers a full recalculation of stats based on the remaining history to maintain data integrity.
 - **Environment Variables**:
-    - `import.meta.env.VITE_API_KEY`: Your Gemini API Key.
-    - `import.meta.env.VITE_ADMIN_EMAIL`: (Optional) to override the default admin.
-    - **Firebase Config**: Configuration is loaded from `.env` and accessed via `import.meta.env.VITE_FIREBASE_*` in `src/services/firebase.ts`.
+    - `GEMINI_API_KEY`: **SECRET**. Used only by the backend. NEVER prefix with `VITE_`.
+    - `VITE_ADMIN_EMAIL`: (Optional) to override the default admin.
+    - **Firebase Config**: Public identifiers accessed via `import.meta.env.VITE_FIREBASE_*`.
 
 ## 5. Troubleshooting / Insights Generation
 If you ask Gemini for insights later, keep in mind:
