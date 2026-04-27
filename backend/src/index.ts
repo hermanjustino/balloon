@@ -29,8 +29,14 @@ app.use(express.json());
 
 // Middleware to verify Firebase ID Token
 const authenticate = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    // Skip auth for health check and public stats
-    if (req.path === '/health' || req.path.startsWith('/api/stats') || req.path === '/ingest/run') return next();
+    // Skip auth for health check, public stats, public contestant pages, and ingest
+    if (
+        req.path === '/health' ||
+        req.path.startsWith('/api/stats') ||
+        req.path.startsWith('/api/contestants') ||
+        req.path.startsWith('/contestants') ||
+        req.path === '/ingest/run'
+    ) return next();
 
     const idToken = req.headers['x-firebase-auth'] as string;
     if (!idToken) {
@@ -216,6 +222,7 @@ app.get('/api/stats/best-episodes', async (req, res) => {
 // 10. Industry Distribution (Phase 2)
 app.get('/api/stats/industries', async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
         const rows = await getIndustries();
         res.json(rows.map(r => ({
             industry:  r.industry,
@@ -259,6 +266,7 @@ app.get('/api/stats/drama', async (req, res) => {
 // 13. Age Match Rates
 app.get('/api/stats/age-match', async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
         const rows = await getAgeMatchRate();
         res.json(rows.map(r => ({
             age:       Number(r.age),
@@ -336,6 +344,199 @@ Return JSON array with objects: { original, city, state, country }`;
     } catch (err: any) {
         console.error('[REFINE-LOCATIONS] Error:', err.message);
         res.status(500).json({ error: err.message });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// CONTESTANT PAGES
+// ---------------------------------------------------------------------------
+
+function toSlug(name: string): string {
+    return name.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+}
+
+function escapeHtml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function buildContestantsList() {
+    const db = admin.firestore();
+    const [contestantsSnap, couplesSnap] = await Promise.all([
+        db.collection('contestants').get(),
+        db.collection('couples').get(),
+    ]);
+
+    const couples = couplesSnap.docs.map(d => d.data());
+
+    const raw = contestantsSnap.docs.map(doc => ({
+        ...(doc.data() as any),
+        id: doc.id,
+        _baseSlug: toSlug((doc.data() as any).name || 'unknown'),
+    }));
+
+    const slugCount: Record<string, number> = {};
+    raw.forEach(c => { slugCount[c._baseSlug] = (slugCount[c._baseSlug] || 0) + 1; });
+
+    return raw.map(c => {
+        const slug = slugCount[c._baseSlug] > 1
+            ? `${c._baseSlug}-ep-${(c.episodeId as string)?.replace('ep_', '') || '0'}`
+            : c._baseSlug;
+
+        const couple = couples.find((cp: any) =>
+            cp.contestant1Id === c.id || cp.contestant2Id === c.id
+        );
+        const partnerName = couple
+            ? (couple.contestant1Id === c.id ? couple.person2 : couple.person1)
+            : null;
+
+        const { _baseSlug, ...rest } = c;
+        return { ...rest, slug, partnerName };
+    });
+}
+
+// Public: list all contestants
+app.get('/api/contestants', async (_req, res) => {
+    try {
+        res.json(await buildContestantsList());
+    } catch (e: any) {
+        console.error('[CONTESTANTS] List error:', e.message);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Public: single contestant by slug
+app.get('/api/contestants/:slug', async (req, res) => {
+    try {
+        const list = await buildContestantsList();
+        const contestant = list.find(c => c.slug === req.params.slug);
+        if (!contestant) return res.status(404).json({ error: 'Not found' });
+
+        const db = admin.firestore();
+        const analysisSnap = await db.collection('analyses').doc(contestant.episodeId).get();
+        const analysis = analysisSnap.exists ? analysisSnap.data() : null;
+
+        res.json({
+            ...contestant,
+            videoUrl: analysis?.videoUrl || null,
+            episodeTitle: analysis?.episodeTitle || null,
+            episodeNumber: analysis?.episodeNumber || null,
+        });
+    } catch (e: any) {
+        console.error('[CONTESTANTS] Detail error:', e.message);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Server-rendered profile page with OG meta tags for social sharing
+app.get('/contestants/:slug', async (req, res) => {
+    try {
+        const list = await buildContestantsList();
+        const c = list.find(x => x.slug === req.params.slug);
+
+        if (!c) {
+            return res.status(404).send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Not Found | Luvlytics</title></head><body style="font-family:sans-serif;padding:2rem"><p>Contestant not found.</p><a href="https://luvlytics.xyz">← Luvlytics</a></body></html>`);
+        }
+
+        const name = escapeHtml(c.name || 'Contestant');
+        const age = escapeHtml(String(c.age || ''));
+        const location = typeof c.location === 'object'
+            ? escapeHtml([c.location?.city, c.location?.state].filter(Boolean).join(', '))
+            : escapeHtml(c.location || '');
+        const job = escapeHtml((c.jobs?.length ? c.jobs[0] : (c.job || '')));
+        const outcome = escapeHtml(c.outcome || 'Unknown');
+        const partner = escapeHtml(c.partnerName || '');
+        const epNum = escapeHtml((c.episodeId as string)?.replace('ep_', '') || '');
+        const slug = req.params.slug;
+
+        const descParts = [
+            age ? `${age} years old` : '',
+            location,
+            job,
+            outcome === 'Matched' && partner ? `Matched with ${partner} on Ep. ${epNum}` : `${outcome} on Ep. ${epNum}`,
+        ].filter(Boolean);
+        const description = escapeHtml(descParts.join(' · '));
+
+        const siteUrl = 'https://luvlytics.xyz';
+        const profileUrl = `${siteUrl}/contestants/${slug}`;
+        const oc = c.outcome === 'Matched' ? '#2d6a4f' : c.outcome === 'Walked Away' ? '#6b6b6b' : '#C13111';
+
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${name} — Pop the Balloon | Luvlytics</title>
+  <meta name="description" content="${description}">
+  <meta property="og:type" content="profile">
+  <meta property="og:title" content="${name} — Pop the Balloon">
+  <meta property="og:description" content="${description}">
+  <meta property="og:url" content="${profileUrl}">
+  <meta property="og:site_name" content="Luvlytics">
+  <meta property="og:image" content="${siteUrl}/og-default.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="${name} — Pop the Balloon">
+  <meta name="twitter:description" content="${description}">
+  <link rel="canonical" href="${profileUrl}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#EFE9E0;--surface:#8B210A;--primary:#C13111;--text:#3E2723;--oc:#EFE9E0;--taupe:#C6B7A6}
+    body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh}
+    .page{max-width:640px;margin:0 auto;padding:2rem 1.5rem}
+    .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:3rem}
+    .brand{font-family:'DM Serif Display',serif;font-size:1.5rem;color:var(--primary);text-decoration:none}
+    .nav-link{font-size:.875rem;color:var(--text);text-decoration:none;opacity:.65}
+    .profile-name{font-family:'DM Serif Display',serif;font-size:2.5rem;color:var(--primary);line-height:1.1}
+    .meta{margin-top:.75rem;display:flex;flex-wrap:wrap;gap:.5rem 1rem;font-size:1rem;opacity:.72}
+    .badge{display:inline-block;margin-top:.875rem;padding:.28rem .9rem;border-radius:999px;font-size:.8rem;font-weight:600;letter-spacing:.04em;color:white}
+    .card{background:var(--surface);color:#EFE9E0;border-radius:16px;padding:1.5rem;margin-bottom:1.25rem}
+    .glass-card{background:rgba(139,33,10,.12);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(193,49,17,.25);border-radius:16px;padding:1.5rem;margin-bottom:1.25rem}
+    .label{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;opacity:.6;margin-bottom:.5rem}
+    .value{font-family:'DM Serif Display',serif;font-size:1.5rem}
+    .cta{display:block;padding:1rem;text-align:center;text-decoration:none;border-radius:12px;font-size:1rem;font-weight:600;margin-top:.75rem}
+    .cta-primary{background:var(--surface);color:#EFE9E0}
+    .cta-secondary{background:transparent;color:var(--primary);border:1.5px solid var(--primary)}
+  </style>
+</head>
+<body>
+<div class="page">
+  <nav class="nav">
+    <a class="brand" href="${siteUrl}">Luvlytics</a>
+    <a class="nav-link" href="${siteUrl}/contestants">All Contestants →</a>
+  </nav>
+  <div style="margin-bottom:2.5rem">
+    <h1 class="profile-name">${name}</h1>
+    <div class="meta">
+      ${age ? `<span>${age} yrs</span>` : ''}
+      ${location ? `<span>${location}</span>` : ''}
+      ${job ? `<span>${job}</span>` : ''}
+    </div>
+    <span class="badge" style="background:${oc}">${outcome}</span>
+  </div>
+  ${outcome === 'Matched' && partner ? `
+  <div class="glass-card">
+    <div class="label" style="color:var(--primary);opacity:.8">Matched with</div>
+    <div class="value" style="color:var(--primary)">${partner}</div>
+    ${epNum ? `<div style="margin-top:.3rem;font-size:.875rem;opacity:.6">Episode ${epNum}</div>` : ''}
+  </div>` : (epNum ? `
+  <div class="card">
+    <div class="label">Episode</div>
+    <div class="value">${epNum}</div>
+  </div>` : '')}
+  <a class="cta cta-primary" href="${siteUrl}">View Full Dashboard →</a>
+  <a class="cta cta-secondary" href="${siteUrl}/contestants">All Contestants</a>
+</div>
+</body>
+</html>`);
+    } catch (e: any) {
+        console.error('[CONTESTANTS-OG] Error:', e.message);
+        res.status(500).send('<html><body>Error loading profile.</body></html>');
     }
 });
 

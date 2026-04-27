@@ -22,7 +22,14 @@
         ],
         "rewrites": [
             {
-                "source": "/api/stats/**",
+                "source": "/api/**",
+                "run": {
+                    "serviceId": "stats-api",
+                    "region": "us-central1"
+                }
+            },
+            {
+                "source": "/contestants/**",
                 "run": {
                     "serviceId": "stats-api",
                     "region": "us-central1"

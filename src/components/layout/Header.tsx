@@ -17,6 +17,12 @@ export const Header = ({ viewMode, setViewMode, onBack }: HeaderProps) => (
             <h1>Pop the Balloon Analytics</h1>
         </div>
         <div className="header-controls">
+            <a
+                href="/contestants"
+                style={{ fontSize: '0.875rem', color: 'var(--text-on-card, #EFE9E0)', opacity: 0.8, textDecoration: 'none', padding: '0.4rem 0.75rem' }}
+            >
+                Contestants
+            </a>
             <button
                 className={`view-toggle ${viewMode === 'public' ? 'active' : ''}`}
                 onClick={() => setViewMode('public')}
