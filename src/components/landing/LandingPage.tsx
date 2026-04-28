@@ -63,6 +63,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnterDashboard, stat
                     <a href="#explore" className="nav-link" onClick={scrollToExplore}>
                         About
                     </a>
+                    <a href="/episodes" className="nav-link">
+                        Episodes
+                    </a>
                     <a href="/contestants" className="nav-link">
                         Contestants
                     </a>

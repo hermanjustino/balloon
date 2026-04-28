@@ -36,6 +36,13 @@
                 }
             },
             {
+                "source": "/episodes/**",
+                "run": {
+                    "serviceId": "stats-api",
+                    "region": "us-central1"
+                }
+            },
+            {
                 "source": "**",
                 "destination": "/index.html"
             }

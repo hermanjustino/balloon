@@ -18,6 +18,12 @@ export const Header = ({ viewMode, setViewMode, onBack }: HeaderProps) => (
         </div>
         <div className="header-controls">
             <a
+                href="/episodes"
+                style={{ fontSize: '0.875rem', color: 'var(--text-on-card, #EFE9E0)', opacity: 0.8, textDecoration: 'none', padding: '0.4rem 0.75rem' }}
+            >
+                Episodes
+            </a>
+            <a
                 href="/contestants"
                 style={{ fontSize: '0.875rem', color: 'var(--text-on-card, #EFE9E0)', opacity: 0.8, textDecoration: 'none', padding: '0.4rem 0.75rem' }}
             >
