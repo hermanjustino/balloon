@@ -47,7 +47,7 @@ export const DramaScoreChart = React.memo(({ data }: { data: DramaRow[] }) => {
     const [selected, setSelected] = useState<DramaRow | null>(null);
 
     if (!data.length) return (
-        <section className="card" style={{ gridColumn: 'span 3' }}>
+        <section className="card table-card">
             <h2 className="card-title">Episode Drama Scores</h2>
             <div className="empty-state" style={{ height: 200 }}>No drama scores yet — backfill pending.</div>
         </section>
@@ -56,7 +56,7 @@ export const DramaScoreChart = React.memo(({ data }: { data: DramaRow[] }) => {
     const sorted = [...data].sort((a, b) => Number(a.episodeNumber) - Number(b.episodeNumber));
 
     return (
-        <section className="card" style={{ gridColumn: 'span 3' }}>
+        <section className="card table-card">
             <h2 className="card-title">Episode Drama Scores</h2>
             <p style={{ fontSize: 12, color: 'rgba(239,233,224,0.5)', marginBottom: 16, marginTop: -8 }}>
                 {data.length} episodes rated · click a bar to see the memorable moment

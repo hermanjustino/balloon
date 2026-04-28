@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ContestantsMap } from './ContestantsMap';
 
 interface LandingPageProps {
@@ -50,8 +50,12 @@ const TOPICS = [
 ];
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onEnterDashboard, stateData = {} }) => {
+    const [navOpen, setNavOpen] = useState(false);
+    const closeNav = () => setNavOpen(false);
+
     const scrollToExplore = (e: React.MouseEvent) => {
         e.preventDefault();
+        closeNav();
         document.getElementById('explore')?.scrollIntoView({ behavior: 'smooth' });
     };
 
@@ -59,17 +63,27 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnterDashboard, stat
         <div className="landing-page">
             <nav className="landing-nav">
                 <div className="nav-brand">LuvLytics</div>
-                <div className="nav-links">
+                <button
+                    className={`burger-btn${navOpen ? ' burger-btn--open' : ''}`}
+                    onClick={() => setNavOpen(o => !o)}
+                    aria-label="Toggle navigation"
+                    aria-expanded={navOpen}
+                >
+                    <span className="burger-bar" />
+                    <span className="burger-bar" />
+                    <span className="burger-bar" />
+                </button>
+                <div className={`nav-links${navOpen ? ' nav-links--open' : ''}`}>
                     <a href="#explore" className="nav-link" onClick={scrollToExplore}>
                         About
                     </a>
-                    <a href="/episodes" className="nav-link">
+                    <a href="/episodes" className="nav-link" onClick={closeNav}>
                         Episodes
                     </a>
-                    <a href="/contestants" className="nav-link">
+                    <a href="/contestants" className="nav-link" onClick={closeNav}>
                         Contestants
                     </a>
-                    <button className="nav-cta" onClick={onEnterDashboard}>
+                    <button className="nav-cta" onClick={() => { closeNav(); onEnterDashboard(); }}>
                         All Trends
                     </button>
                 </div>

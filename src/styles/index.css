@@ -96,6 +96,64 @@ div {
   align-items: center;
 }
 
+.header-nav-link {
+  font-size: 0.875rem;
+  color: var(--text-on-card, #EFE9E0);
+  opacity: 0.8;
+  text-decoration: none;
+  padding: 0.4rem 0.75rem;
+  transition: opacity 0.2s;
+}
+
+.header-nav-link:hover {
+  opacity: 1;
+}
+
+/* Burger button — hidden on desktop, shown on mobile */
+.burger-btn {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 7px;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: border-color 0.2s;
+}
+
+.burger-btn:hover {
+  border-color: var(--primary-color);
+}
+
+.burger-bar {
+  display: block;
+  width: 16px;
+  height: 2px;
+  background: var(--text-muted-color);
+  border-radius: 2px;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  transform-origin: center;
+}
+
+.burger-btn--open .burger-bar:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.burger-btn--open .burger-bar:nth-child(2) {
+  opacity: 0;
+}
+
+.burger-btn--open .burger-bar:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
 .view-toggle {
   background: transparent;
   border: 1px solid var(--border-color);
@@ -216,6 +274,7 @@ div {
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  grid-auto-columns: 1fr;
   grid-template-rows: auto auto;
   gap: 1.5rem;
   width: 100%;
@@ -349,6 +408,7 @@ textarea:focus {
 @media (max-width: 1024px) {
   .dashboard-grid {
     grid-template-columns: 1fr 1fr;
+    grid-auto-columns: 1fr;
   }
 
   .chart-card {
@@ -373,38 +433,90 @@ textarea:focus {
     padding: 1rem;
   }
 
+  /* Header: brand row stays horizontal, controls collapse behind burger */
   .header {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
+    align-items: stretch;
+    gap: 0;
+    padding-bottom: 1rem;
   }
 
   .header-brand {
     width: 100%;
     justify-content: space-between;
+    align-items: center;
   }
 
-  /* Create space for the back button so it doesn't squish title */
   .header h1 {
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     flex: 1;
   }
 
+  /* Show burger on mobile */
+  .burger-btn {
+    display: flex;
+  }
+
+  /* Nav hidden by default on mobile; shown when JS adds --open */
   .header-controls {
+    display: none;
     width: 100%;
-    justify-content: flex-start;
-    /* Keep controls grouped */
+    flex-direction: column;
+    gap: 0;
+    padding-top: 0.75rem;
+    margin-top: 0.75rem;
+    border-top: 1px solid rgba(193, 49, 17, 0.2);
   }
 
+  .header-controls--open {
+    display: flex;
+  }
+
+  .header-controls .header-nav-link {
+    display: block !important;
+    width: 100%;
+    padding: 0.8rem 0.5rem !important;
+    font-size: 1.1rem !important;
+    color: var(--text-color) !important; /* Darker brown for visibility */
+    opacity: 1 !important;
+    border-bottom: 1px solid rgba(193, 49, 17, 0.1);
+    text-align: left;
+  }
+
+  .header-controls .view-toggle {
+    width: 100%;
+    text-align: left;
+    padding: 0.75rem 0.25rem;
+    border: none;
+    border-bottom: 1px solid rgba(193, 49, 17, 0.1);
+    border-radius: 0;
+    font-size: 1rem;
+    color: var(--text-muted-color);
+  }
+
+  .header-controls .view-toggle.active {
+    color: var(--text-color);
+    background: transparent;
+  }
+
+  /* Grid: force single column, override any span */
   .dashboard-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+    grid-auto-columns: 1fr;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1rem;
   }
 
+  .card,
   .chart-card,
   .demographics-card,
   .table-card,
   .input-card {
-    grid-column: span 1;
+    grid-column: span 1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden;
   }
 
   .form-row {
@@ -518,6 +630,8 @@ textarea:focus {
 .pie-chart {
   width: 180px;
   height: 180px;
+  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
   border-radius: 50%;
   /* Use the variables set in the component */
   background: conic-gradient(var(--bg-color) 0% var(--male-pct),
@@ -1343,10 +1457,50 @@ textarea:focus {
 @media (max-width: 768px) {
   .landing-nav {
     padding: 1rem 1.5rem;
+    flex-wrap: wrap;
+    align-items: center;
   }
 
+  /* Hide desktop nav links; show burger instead */
   .nav-links {
-    gap: 1.25rem;
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    gap: 0;
+    padding-top: 0.75rem;
+    margin-top: 0.75rem;
+    border-top: 1px solid rgba(193, 49, 17, 0.15);
+  }
+
+  .nav-links--open {
+    display: flex;
+  }
+
+  .nav-links .nav-link {
+    padding: 0.8rem 0.5rem !important;
+    font-size: 1.1rem !important;
+    color: var(--text-color) !important; /* Darker brown for visibility */
+    border-bottom: 1px solid rgba(193, 49, 17, 0.1);
+    width: 100%;
+    text-align: left;
+  }
+
+  .nav-links .nav-cta {
+    margin-top: 0.75rem;
+    width: 100%;
+    text-align: center;
+    padding: 0.65rem 1rem;
+  }
+
+  /* Style the burger in the landing nav context */
+  .landing-nav .burger-btn {
+    display: flex;
+    margin-left: auto;
+    border-color: rgba(193, 49, 17, 0.4);
+  }
+
+  .landing-nav .burger-bar {
+    background: var(--text-muted-color);
   }
 
   .landing-hero {

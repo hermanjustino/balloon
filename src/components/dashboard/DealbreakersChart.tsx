@@ -15,7 +15,7 @@ export const DealbreakersChart = React.memo(({ data }: { data: DealbreakersRow[]
     const [view, setView] = useState<'reasons' | 'categories'>('reasons');
 
     if (!data.length) return (
-        <section className="card" style={{ gridColumn: 'span 3' }}>
+        <section className="card table-card">
             <h2 className="card-title">Top Reasons People Get Popped</h2>
             <div className="empty-state" style={{ height: 200 }}>No dealbreaker data yet — backfill pending.</div>
         </section>
@@ -36,7 +36,7 @@ export const DealbreakersChart = React.memo(({ data }: { data: DealbreakersRow[]
         : categories.map(c => ({ label: c.category, count: c.count, category: c.category }));
 
     return (
-        <section className="card" style={{ gridColumn: 'span 3' }}>
+        <section className="card table-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <h2 className="card-title" style={{ marginBottom: 0 }}>Top Reasons People Get Popped</h2>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -70,8 +70,8 @@ export const DealbreakersChart = React.memo(({ data }: { data: DealbreakersRow[]
                             color: 'rgba(239,233,224,0.4)', textAlign: 'right', flexShrink: 0,
                         }}>{i + 1}</span>
                         <span style={{
-                            width: view === 'reasons' ? 220 : 120, fontSize: 13,
-                            color: '#EFE9E0', flexShrink: 0, overflow: 'hidden',
+                            flex: '1 1 auto', maxWidth: view === 'reasons' ? 220 : 120, minWidth: 60,
+                            fontSize: 13, color: '#EFE9E0', overflow: 'hidden',
                             textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                         }} title={item.label}>{item.label}</span>
                         <div style={{

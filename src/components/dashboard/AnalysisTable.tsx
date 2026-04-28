@@ -5,7 +5,8 @@ type SortKey = 'episodeNumber' | 'episodeTitle' | 'matchesCount' | 'participantC
 type SortDirection = 'asc' | 'desc';
 
 export const AnalysisTable = ({ recentAnalyses, onSelectEpisode, isAdmin, onDelete }: { recentAnalyses: AnalysisResult[], onSelectEpisode: (ep: AnalysisResult) => void, isAdmin?: boolean, onDelete?: (id: string, hasTranscript: boolean) => void }) => {
-    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>(null);
+    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection } | null>({ key: 'episodeNumber', direction: 'desc' });
+    const [showFullList, setShowFullList] = useState(false);
 
     const sortedData = useMemo(() => {
         if (!sortConfig) return recentAnalyses;
@@ -51,63 +52,117 @@ export const AnalysisTable = ({ recentAnalyses, onSelectEpisode, isAdmin, onDele
 
     const headerStyle = { cursor: 'pointer', userSelect: 'none' } as React.CSSProperties;
 
+    const dashboardData = useMemo(() => sortedData.slice(0, 10), [sortedData]);
+
+    const renderTable = (data: AnalysisResult[], isModal: boolean = false) => (
+        <div className="table-responsive">
+            <table className="data-table">
+                <thead>
+                    <tr>
+                        <th style={headerStyle} onClick={() => requestSort('episodeNumber')}>
+                            Ep #{getSortIndicator('episodeNumber')}
+                        </th>
+                        <th style={headerStyle} onClick={() => requestSort('episodeTitle')}>
+                            Title{getSortIndicator('episodeTitle')}
+                        </th>
+                        <th style={headerStyle} onClick={() => requestSort('matchesCount')}>
+                            Matches{getSortIndicator('matchesCount')}
+                        </th>
+                        <th style={headerStyle} onClick={() => requestSort('participantCount')}>
+                            Participants{getSortIndicator('participantCount')}
+                        </th>
+                        {isAdmin && <th>Actions</th>}
+                    </tr>
+                </thead>
+                <tbody>
+                    {data.map((item, index) => (
+                        <tr
+                            key={`${item.id}-${index}`}
+                            onClick={() => {
+                                onSelectEpisode(item);
+                                if (isModal) setShowFullList(false);
+                            }}
+                            className="row-clickable"
+                        >
+                            <td style={{ fontWeight: 'bold', color: 'var(--bg-color)' }}>
+                                {item.episodeNumber ? item.episodeNumber : '-'}
+                            </td>
+                            <td>{item.episodeTitle}</td>
+                            <td>{item.matchesCount}</td>
+                            <td>{item.participantCount}</td>
+                            {isAdmin && (
+                                <td onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                        className="delete-btn-icon"
+                                        title="Delete this episode"
+                                        onClick={() => onDelete && onDelete(item.id, !!(item.hasTranscript || item.transcriptUrl))}
+                                    >
+                                        🗑️
+                                    </button>
+                                </td>
+                            )}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+
     return (
         <section className="card table-card">
-            <h2 className="card-title">Episodes</h2>
-            <p style={{ marginBottom: '1rem', color: 'var(--text-muted-color)', fontSize: '0.9rem' }}>Click a row to view contestant details</p>
-            {sortedData && sortedData.length > 0 ? (
-                <div className="table-responsive">
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th style={headerStyle} onClick={() => requestSort('episodeNumber')}>
-                                    Ep #{getSortIndicator('episodeNumber')}
-                                </th>
-                                <th style={headerStyle} onClick={() => requestSort('episodeTitle')}>
-                                    Title{getSortIndicator('episodeTitle')}
-                                </th>
-                                <th style={headerStyle} onClick={() => requestSort('matchesCount')}>
-                                    Matches{getSortIndicator('matchesCount')}
-                                </th>
-                                <th style={headerStyle} onClick={() => requestSort('participantCount')}>
-                                    Participants{getSortIndicator('participantCount')}
-                                </th>
-                                {isAdmin && <th>Actions</th>}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {sortedData.map((item, index) => {
-                                return (
-                                    <tr
-                                        key={`${item.id}-${index}`}
-                                        onClick={() => onSelectEpisode(item)}
-                                        className="row-clickable"
-                                    >
-                                        <td style={{ fontWeight: 'bold', color: 'var(--bg-color)' }}>
-                                            {item.episodeNumber ? item.episodeNumber : '-'}
-                                        </td>
-                                        <td>{item.episodeTitle}</td>
-                                        <td>{item.matchesCount}</td>
-                                        <td>{item.participantCount}</td>
-                                        {isAdmin && (
-                                            <td onClick={(e) => e.stopPropagation()}>
-                                                <button
-                                                    className="delete-btn-icon"
-                                                    title="Delete this episode"
-                                                    onClick={() => onDelete && onDelete(item.id, !!(item.hasTranscript || item.transcriptUrl))}
-                                                >
-                                                    🗑️
-                                                </button>
-                                            </td>
-                                        )}
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                <div>
+                    <h2 className="card-title" style={{ marginBottom: '0.25rem' }}>Episodes</h2>
+                    <p style={{ color: 'var(--text-muted-color)', fontSize: '0.9rem' }}>Click a row to view contestant details</p>
                 </div>
+                {sortedData.length > 10 && (
+                    <button 
+                        className="view-toggle" 
+                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                        onClick={() => setShowFullList(true)}
+                    >
+                        See All {sortedData.length}
+                    </button>
+                )}
+            </div>
+
+            {dashboardData && dashboardData.length > 0 ? (
+                <>
+                    {renderTable(dashboardData)}
+                    {sortedData.length > 10 && (
+                        <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+                            <button 
+                                className="back-btn" 
+                                style={{ width: '100%', maxWidth: '200px' }}
+                                onClick={() => setShowFullList(true)}
+                            >
+                                View All Episodes
+                            </button>
+                        </div>
+                    )}
+                </>
             ) : (
                 <div className="empty-state" style={{ padding: '2rem' }}>No episodes recorded.</div>
+            )}
+
+            {/* Full List Modal */}
+            {showFullList && (
+                <div className="modal-backdrop" onClick={() => setShowFullList(false)}>
+                    <div className="modal-content" style={{ maxWidth: '900px' }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <div>
+                                <h2 style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>All Episodes</h2>
+                                <p style={{ color: 'var(--text-muted-color)', fontSize: '0.9rem' }}>
+                                    Showing all {sortedData.length} recorded analyses
+                                </p>
+                            </div>
+                            <button className="close-btn" onClick={() => setShowFullList(false)}>&times;</button>
+                        </div>
+                        <div style={{ marginTop: '1.5rem', maxHeight: '70vh', overflowY: 'auto' }}>
+                            {renderTable(sortedData, true)}
+                        </div>
+                    </div>
+                </div>
             )}
         </section>
     );

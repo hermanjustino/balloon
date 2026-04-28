@@ -34,7 +34,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export const OutcomeBreakdown = React.memo(({ data }: { data: OutcomeRow[] }) => {
     if (!data.length) return (
-        <section className="card chart-card">
+        <section className="card table-card">
             <h2 className="card-title">Outcome Breakdown by Role</h2>
             <div className="empty-state" style={{ height: 250 }}>No outcome data.</div>
         </section>
@@ -61,7 +61,7 @@ export const OutcomeBreakdown = React.memo(({ data }: { data: OutcomeRow[] }) =>
     };
 
     return (
-        <section className="card" style={{ gridColumn: 'span 3' }}>
+        <section className="card table-card">
             <h2 className="card-title">Outcome Breakdown by Role</h2>
 
             <div style={{ display: 'flex', gap: '2rem', marginBottom: '1rem', flexWrap: 'wrap' }}>

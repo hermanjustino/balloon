@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 type HeaderProps = {
     viewMode: string;
@@ -6,41 +6,46 @@ type HeaderProps = {
     onBack?: () => void;
 };
 
-export const Header = ({ viewMode, setViewMode, onBack }: HeaderProps) => (
-    <header className="header">
-        <div className="header-brand">
-            {onBack && (
-                <button className="back-btn" onClick={onBack}>
-                    &larr; Home
+export const Header = ({ viewMode, setViewMode, onBack }: HeaderProps) => {
+    const [menuOpen, setMenuOpen] = useState(false);
+    const close = () => setMenuOpen(false);
+
+    return (
+        <header className="header">
+            <div className="header-brand">
+                {onBack && (
+                    <button className="back-btn" onClick={onBack}>
+                        &larr; Home
+                    </button>
+                )}
+                <h1>Pop the Balloon Analytics</h1>
+                <button
+                    className={`burger-btn${menuOpen ? ' burger-btn--open' : ''}`}
+                    onClick={() => setMenuOpen(o => !o)}
+                    aria-label="Toggle navigation"
+                    aria-expanded={menuOpen}
+                >
+                    <span className="burger-bar" />
+                    <span className="burger-bar" />
+                    <span className="burger-bar" />
                 </button>
-            )}
-            <h1>Pop the Balloon Analytics</h1>
-        </div>
-        <div className="header-controls">
-            <a
-                href="/episodes"
-                style={{ fontSize: '0.875rem', color: 'var(--text-on-card, #EFE9E0)', opacity: 0.8, textDecoration: 'none', padding: '0.4rem 0.75rem' }}
-            >
-                Episodes
-            </a>
-            <a
-                href="/contestants"
-                style={{ fontSize: '0.875rem', color: 'var(--text-on-card, #EFE9E0)', opacity: 0.8, textDecoration: 'none', padding: '0.4rem 0.75rem' }}
-            >
-                Contestants
-            </a>
-            <button
-                className={`view-toggle ${viewMode === 'public' ? 'active' : ''}`}
-                onClick={() => setViewMode('public')}
-            >
-                Public View
-            </button>
-            <button
-                className={`view-toggle ${viewMode === 'admin' ? 'active' : ''}`}
-                onClick={() => setViewMode('admin')}
-            >
-                Admin
-            </button>
-        </div>
-    </header>
-);
+            </div>
+            <div className={`header-controls${menuOpen ? ' header-controls--open' : ''}`}>
+                <a href="/episodes" className="header-nav-link" onClick={close}>Episodes</a>
+                <a href="/contestants" className="header-nav-link" onClick={close}>Contestants</a>
+                <button
+                    className={`view-toggle ${viewMode === 'public' ? 'active' : ''}`}
+                    onClick={() => { setViewMode('public'); close(); }}
+                >
+                    Public View
+                </button>
+                <button
+                    className={`view-toggle ${viewMode === 'admin' ? 'active' : ''}`}
+                    onClick={() => { setViewMode('admin'); close(); }}
+                >
+                    Admin
+                </button>
+            </div>
+        </header>
+    );
+};
