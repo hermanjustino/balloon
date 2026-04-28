@@ -141,7 +141,7 @@ export function ContestantIndex() {
 function ContestantCard({ c }: { c: ContestantSummary; key?: string }) {
     const location = formatLocation(c.location);
     const job = primaryJob(c);
-    const epNum = c.episodeId?.replace('ep_', '') || '';
+    const epNum = c.episodeId?.startsWith('ep_') ? c.episodeId.replace('ep_', '') : '';
     const [hovered, setHovered] = useState(false);
 
     return (
