@@ -192,3 +192,59 @@ resource "google_firebase_extensions_instance" "analyses_export" {
   }
   depends_on = [google_project_service.firebase_extensions]
 }
+
+resource "google_firebase_extensions_instance" "episode_sentiment_export" {
+  provider    = google-beta
+  project     = var.project_id
+  instance_id = "firestore-bigquery-episode-sentiment"
+  config {
+    extension_ref = "firebase/firestore-bigquery-export"
+    params = {
+      COLLECTION_PATH               = "episode_sentiment"
+      DATASET_ID                    = var.bigquery_dataset_id
+      TABLE_ID                      = "episode_sentiment"
+      LOCATION                      = var.location
+      BIGQUERY_PROJECT_ID           = var.project_id
+      DATABASE_ID                   = "(default)"
+      DATABASE_REGION               = var.location
+      DATASET_LOCATION              = "us"
+      VIEW_TYPE                     = "view"
+      LOG_LEVEL                     = "info"
+      EXCLUDE_OLD_DATA              = "no"
+      WILDCARD_IDS                  = "false"
+      MAX_DISPATCHES_PER_SECOND     = "100"
+      MAX_ENQUEUE_ATTEMPTS          = "3"
+      TABLE_PARTITIONING            = "NONE"
+      USE_NEW_SNAPSHOT_QUERY_SYNTAX = "no"
+    }
+  }
+  depends_on = [google_project_service.firebase_extensions]
+}
+
+resource "google_firebase_extensions_instance" "episode_comments_export" {
+  provider    = google-beta
+  project     = var.project_id
+  instance_id = "firestore-bigquery-episode-comments"
+  config {
+    extension_ref = "firebase/firestore-bigquery-export"
+    params = {
+      COLLECTION_PATH               = "episode_comments"
+      DATASET_ID                    = var.bigquery_dataset_id
+      TABLE_ID                      = "episode_comments"
+      LOCATION                      = var.location
+      BIGQUERY_PROJECT_ID           = var.project_id
+      DATABASE_ID                   = "(default)"
+      DATABASE_REGION               = var.location
+      DATASET_LOCATION              = "us"
+      VIEW_TYPE                     = "view"
+      LOG_LEVEL                     = "info"
+      EXCLUDE_OLD_DATA              = "no"
+      WILDCARD_IDS                  = "false"
+      MAX_DISPATCHES_PER_SECOND     = "100"
+      MAX_ENQUEUE_ATTEMPTS          = "3"
+      TABLE_PARTITIONING            = "NONE"
+      USE_NEW_SNAPSHOT_QUERY_SYNTAX = "no"
+    }
+  }
+  depends_on = [google_project_service.firebase_extensions]
+}

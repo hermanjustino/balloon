@@ -29,28 +29,40 @@ service cloud.firestore {
              request.auth.token.email == '${getAdminEmail()}';
     }
 
-    // Public Read-Only Access
-    match /{document=**} {
-      allow read: if true;
-    }
-
-    // Analyses: Split logic for Delete vs Create/Update
     match /analyses/{analysisId} {
-      // Deletes don't have 'request.resource', so we only check admin status
-      allow delete: if isAdmin();
-      
-      // Creates and Updates require data validation
-      allow create, update: if isAdmin() && 
-                   request.resource.data.matchRate is number &&
-                   request.resource.data.matchRate >= 0 && 
-                   request.resource.data.matchRate <= 100;
+      allow read: if true;
+      allow write: if isAdmin();
     }
     
     match /transcripts/{transcriptId} {
-      allow write: if isAdmin(); // Only admin can save transcripts
+      allow read, write: if isAdmin();
+    }
+
+    match /episode_comments/{episodeId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /processed_episodes/{videoId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /episode_sentiment/{episodeId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     match /balloon_data/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /contestants/{contestantId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /couples/{coupleId} {
+      allow read: if true;
       allow write: if isAdmin();
     }
   }

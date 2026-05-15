@@ -189,7 +189,7 @@ const App = () => {
             );
 
             // --- 2. Save to Firestore (OLTP) ---
-            await StorageService.fullySaveAnalysis(result);
+            await StorageService.fullySaveAnalysis(result, analysisInput.transcript);
 
             // --- 3. Update UI ---
             // OLTP History updates immediately

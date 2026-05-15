@@ -8,29 +8,40 @@ service cloud.firestore {
              request.auth.token.email == '${admin_email}';
     }
 
-    // Public read access
-    match /{document=**} {
-      allow read: if true;
-    }
-
-    // Admin-only write access
     match /analyses/{analysisId} {
+      allow read: if true;
       allow write: if isAdmin();
     }
     
     match /transcripts/{transcriptId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /episode_comments/{episodeId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /processed_episodes/{videoId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /episode_sentiment/{episodeId} {
+      allow read: if true;
       allow write: if isAdmin();
     }
 
     match /balloon_data/{docId} {
+      allow read: if true;
       allow write: if isAdmin();
     }
 
     match /contestants/{contestantId} {
+      allow read: if true;
       allow write: if isAdmin();
     }
 
     match /couples/{coupleId} {
+      allow read: if true;
       allow write: if isAdmin();
     }
   }

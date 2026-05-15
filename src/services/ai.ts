@@ -1,5 +1,3 @@
-import { doc, setDoc } from "firebase/firestore";
-import { db } from "./firebase";
 import { AuthService } from "./auth";
 import { AnalysisResult } from "../types";
 
@@ -30,23 +28,7 @@ export const AIService = {
             const err = await response.json().catch(() => ({ error: response.statusText }));
             throw new Error(err.error || 'Analyze request failed');
         }
-        const result = await response.json();
-
-        // Save transcript to Firestore directly (uses Firebase Auth, not API key)
-        try {
-            await setDoc(doc(db, "transcripts", result.id), {
-                content: transcript,
-                episodeTitle: result.episodeTitle,
-                episodeNumber: episodeNumber || "N/A",
-                videoUrl: videoUrl || "",
-                analysisId: result.id,
-                createdAt: new Date().toISOString()
-            });
-        } catch (uploadError) {
-            console.error("Failed to save transcript to Firestore:", uploadError);
-        }
-
-        return result as AnalysisResult;
+        return await response.json() as AnalysisResult;
     },
 
     refineLocations: async (contestants: { name: string, location: string | { city: string, state: string, original: string } }[]): Promise<any[]> => {

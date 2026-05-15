@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, setDoc, getDoc, query, orderBy, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, query, orderBy, deleteDoc } from "firebase/firestore";
 import { ref, deleteObject, listAll } from "firebase/storage";
 import { db, storage, handleFirestoreError } from "./firebase";
 import { Metrics, MatchDataPoint, Demographics, AnalysisResult } from "../types";
@@ -177,21 +177,24 @@ export const StorageService = {
         }
     },
 
-    addAnalysis: async (data: AnalysisResult) => {
+    // Persist through the backend so normalized Firestore writes use one contract.
+    fullySaveAnalysis: async (result: AnalysisResult, transcript?: string) => {
         try {
-            // Use setDoc with a specific ID to ensure consistency between analyses and transcripts
-            await setDoc(doc(db, "analyses", data.id), data);
-        } catch (e) { handleFirestoreError(e, 'addAnalysis'); }
-    },
-
-    // Consolidates saving to all 3 collections with "Clear-then-Upsert"
-    fullySaveAnalysis: async (result: AnalysisResult) => {
-        try {
-            await Promise.all([
-                StorageService.addAnalysis(result),
-                StorageService.saveContestants(result.contestants || [], result.id, result.episodeNumber, result.episodeTitle),
-                StorageService.saveCouples(result.couples || [], result.id, result.episodeNumber, result.episodeTitle)
-            ]);
+            const user = AuthService.getCurrentUser();
+            if (!user) throw new Error('Not authenticated');
+            const token = await user.getIdToken();
+            const res = await fetch('/api/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Firebase-Auth': token,
+                },
+                body: JSON.stringify({ result, transcript }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ error: res.statusText }));
+                throw new Error(err.error || 'Save request failed');
+            }
         } catch (e) {
             console.error("fullySaveAnalysis failed:", e);
             throw e;
@@ -200,12 +203,12 @@ export const StorageService = {
 
     batchUpdateAnalyses: async (updates: AnalysisResult[]) => {
         try {
-            // Firestore batches are limited to 500 ops. We'll do them in chunks.
+            // Keep large admin migrations from flooding the save endpoint at once.
             const chunkSize = 400;
             for (let i = 0; i < updates.length; i += chunkSize) {
                 const chunk = updates.slice(i, i + chunkSize);
                 const batchPromises = chunk.map(data =>
-                    setDoc(doc(db, "analyses", data.id), data, { merge: true })
+                    StorageService.fullySaveAnalysis(data)
                 );
                 await Promise.all(batchPromises);
             }
@@ -294,45 +297,6 @@ export const StorageService = {
         } catch (e) {
             handleFirestoreError(e, 'clearAll');
             throw e; // Re-throw so the UI knows it failed
-        }
-    },
-
-    // NEW: Save contestants to normalized collection
-    saveContestants: async (contestants: any[], episodeId: string, episodeNumber?: string, episodeTitle?: string) => {
-        try {
-            const writes = contestants.map(contestant =>
-                setDoc(doc(db, "contestants", contestant.id), {
-                    ...contestant,
-                    episodeId,
-                    episodeNumber: episodeNumber || null,
-                    episodeTitle: episodeTitle || "",
-                    analyzedAt: new Date().toISOString()
-                })
-            );
-            await Promise.all(writes);
-        } catch (e) {
-            handleFirestoreError(e, 'saveContestants');
-        }
-    },
-
-    // NEW: Save couples to normalized collection  
-    saveCouples: async (couples: any[], episodeId: string, episodeNumber?: string, episodeTitle?: string) => {
-        try {
-            const writes = couples.map(couple =>
-                setDoc(doc(db, "couples", crypto.randomUUID()), {
-                    episodeId,
-                    episodeNumber: episodeNumber || null,
-                    episodeTitle: episodeTitle || "",
-                    contestant1Id: couple.contestant1Id,
-                    contestant2Id: couple.contestant2Id,
-                    person1Name: couple.person1,  // Denormalized for easy display
-                    person2Name: couple.person2,
-                    matchedAt: new Date().toISOString()
-                })
-            );
-            await Promise.all(writes);
-        } catch (e) {
-            handleFirestoreError(e, 'saveCouples');
         }
     },
 };

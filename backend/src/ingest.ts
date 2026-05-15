@@ -39,6 +39,51 @@ interface IngestResult {
     errors: string[];
 }
 
+interface YouTubeComment {
+    text: string;
+    likes: number;
+    replies: number;
+}
+
+interface CommentSentimentResult {
+    overallSentiment: string;
+    sentimentScore: number;
+    positivePercent: number;
+    negativePercent: number;
+    neutralPercent: number;
+    humorPercent: number;
+    topThemes: string[];
+    audienceSummary: string;
+    topPraises: string[];
+    topCritiques: string[];
+    mostDiscussedContestant: string;
+}
+
+function normalizeIdPart(value: unknown): string {
+    const normalized = String(value ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+
+    return normalized || 'unknown';
+}
+
+function uniqueEpisodeScopedId(
+    episodeId: string,
+    value: unknown,
+    seen: Map<string, number>
+): string {
+    const base = `${episodeId}_${normalizeIdPart(value)}`;
+    const count = seen.get(base) || 0;
+    seen.set(base, count + 1);
+    return count === 0 ? base : `${base}_${count + 1}`;
+}
+
+function coupleDocId(episodeId: string, person1: unknown, person2: unknown): string {
+    return `${episodeId}_${normalizeIdPart(person1)}_${normalizeIdPart(person2)}`;
+}
+
 // ---------------------------------------------------------------------------
 // YouTube helpers
 // ---------------------------------------------------------------------------
@@ -145,6 +190,99 @@ async function fetchCaptions(videoId: string): Promise<string> {
     }
 
     return data.content.trim();
+}
+
+// ---------------------------------------------------------------------------
+// YouTube comment helpers
+// ---------------------------------------------------------------------------
+
+export async function fetchComments(videoId: string, maxResults = 100): Promise<YouTubeComment[]> {
+    const url = `${YOUTUBE_API_BASE}/commentThreads?part=snippet&videoId=${videoId}&maxResults=${maxResults}&order=relevance&key=${YOUTUBE_API_KEY}`;
+    const res = await fetch(url);
+    if (res.status === 403) return []; // comments disabled
+    if (!res.ok) throw new Error(`YouTube commentThreads API error: ${res.status}`);
+    const data = await res.json() as any;
+    return (data.items || []).map((item: any) => ({
+        text: item.snippet?.topLevelComment?.snippet?.textOriginal || '',
+        likes: item.snippet?.topLevelComment?.snippet?.likeCount || 0,
+        replies: item.snippet?.totalReplyCount || 0,
+    }));
+}
+
+export async function analyzeCommentSentiment(
+    comments: YouTubeComment[],
+    episodeNumber: string
+): Promise<CommentSentimentResult> {
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+    const commentText = comments
+        .map(c => `[${c.likes} likes] ${c.text}`)
+        .join('\n');
+
+    const schema: Schema = {
+        type: Type.OBJECT,
+        properties: {
+            overallSentiment:        { type: Type.STRING, description: 'Positive, Negative, Mixed, or Neutral' },
+            sentimentScore:          { type: Type.NUMBER, description: 'Score from -100 (very negative) to 100 (very positive)' },
+            positivePercent:         { type: Type.NUMBER, description: 'Percentage of positive comments (0-100)' },
+            negativePercent:         { type: Type.NUMBER, description: 'Percentage of negative comments (0-100)' },
+            neutralPercent:          { type: Type.NUMBER, description: 'Percentage of neutral/observational comments (0-100)' },
+            humorPercent:            { type: Type.NUMBER, description: 'Percentage of humorous/joking comments (0-100)' },
+            topThemes:               { type: Type.ARRAY, description: '3-5 dominant topics discussed', items: { type: Type.STRING } },
+            audienceSummary:         { type: Type.STRING, description: '2-3 sentence summary of how the audience reacted' },
+            topPraises:              { type: Type.ARRAY, description: 'Top 3-5 things the audience loved', items: { type: Type.STRING } },
+            topCritiques:            { type: Type.ARRAY, description: 'Top 3-5 things the audience criticized', items: { type: Type.STRING } },
+            mostDiscussedContestant: { type: Type.STRING, description: 'Name of most mentioned person in comments, empty string if unclear' },
+        },
+        required: ['overallSentiment', 'sentimentScore', 'positivePercent', 'negativePercent', 'neutralPercent', 'humorPercent', 'topThemes', 'audienceSummary', 'topPraises', 'topCritiques', 'mostDiscussedContestant'],
+    };
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: `Analyze the audience comments below from Episode ${episodeNumber} of the YouTube dating show "Pop the Balloon". Comments are sorted by relevance (most liked first) with their like count in brackets.
+
+Assess the overall sentiment, what topics dominated the discussion, and what specific things viewers praised or criticized.
+
+COMMENTS:
+${commentText}`,
+        config: { responseMimeType: 'application/json', responseSchema: schema },
+    });
+
+    return JSON.parse(response.text ?? '{}') as CommentSentimentResult;
+}
+
+export async function saveCommentSentiment(
+    episodeId: string,
+    episodeNumber: string,
+    videoId: string,
+    comments: YouTubeComment[],
+    sentiment: CommentSentimentResult
+): Promise<void> {
+    const db = admin.firestore();
+    const now = new Date().toISOString();
+    const topComments = [...comments]
+        .sort((a, b) => b.likes - a.likes)
+        .slice(0, 10)
+        .map(c => ({ text: c.text, likes: c.likes, replies: c.replies }));
+
+    await Promise.all([
+        db.collection('episode_sentiment').doc(episodeId).set({
+            episodeId,
+            episodeNumber,
+            videoId,
+            sampleSize: comments.length,
+            analyzedAt: now,
+            ...sentiment,
+            topComments,
+        }),
+        db.collection('episode_comments').doc(episodeId).set({
+            episodeId,
+            episodeNumber,
+            videoId,
+            fetchedAt: now,
+            comments,
+        }),
+    ]);
 }
 
 // ---------------------------------------------------------------------------
@@ -267,10 +405,11 @@ ${transcript}`,
 
     const result = JSON.parse(jsonString);
 
-    // Assign stable UUIDs to contestants and link couples
+    // Assign deterministic episode-scoped IDs and link couples to those IDs.
+    const seenContestantIds = new Map<string, number>();
     const contestantsWithIds = (result.contestants || []).map((c: any) => ({
         ...c,
-        id: admin.firestore().collection('_').doc().id, // generates a Firestore push ID server-side
+        id: uniqueEpisodeScopedId(episodeId, c.name, seenContestantIds),
     }));
 
     const couplesWithIds = (result.couples || []).map((couple: any) => {
@@ -299,49 +438,113 @@ ${transcript}`,
 // Firestore save (mirrors frontend StorageService.fullySaveAnalysis)
 // ---------------------------------------------------------------------------
 
-async function saveToFirestore(result: any, transcript: string): Promise<void> {
+async function deleteEpisodeScopedDocs(collectionName: string, episodeId: string): Promise<void> {
+    const db = admin.firestore();
+    const snap = await db.collection(collectionName).where('episodeId', '==', episodeId).get();
+    if (snap.empty) return;
+
+    const batch = db.batch();
+    snap.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+}
+
+export async function saveToFirestore(result: any, transcript?: string): Promise<void> {
     const db = admin.firestore();
     const now = new Date().toISOString();
+    const episodeId = result.id;
+    if (!episodeId) throw new Error('Analysis result is missing id');
+
+    const seenContestantIds = new Map<string, number>();
+    const contestants = (result.contestants || []).map((contestant: any) => {
+        const hasCanonicalId = typeof contestant.id === 'string' && contestant.id.startsWith(`${episodeId}_`);
+        const id = hasCanonicalId
+            ? contestant.id
+            : uniqueEpisodeScopedId(episodeId, contestant.name, seenContestantIds);
+
+        if (hasCanonicalId) {
+            seenContestantIds.set(id, (seenContestantIds.get(id) || 0) + 1);
+        }
+
+        return {
+            ...contestant,
+            id,
+            episodeId,
+            episodeNumber: result.episodeNumber || null,
+            episodeTitle: result.episodeTitle || '',
+            analyzedAt: now,
+        };
+    });
+
+    const contestantsByName = new Map<string, any>(
+        contestants.map((contestant: any) => [normalizeIdPart(contestant.name), contestant])
+    );
+
+    const couples = (result.couples || []).map((couple: any) => {
+        const person1 = couple.person1 || couple.person1Name;
+        const person2 = couple.person2 || couple.person2Name;
+        const c1 = contestantsByName.get(normalizeIdPart(person1));
+        const c2 = contestantsByName.get(normalizeIdPart(person2));
+
+        return {
+            ...couple,
+            id: coupleDocId(episodeId, person1, person2),
+            episodeId,
+            episodeNumber: result.episodeNumber || null,
+            episodeTitle: result.episodeTitle || '',
+            contestant1Id: couple.contestant1Id || c1?.id || null,
+            contestant2Id: couple.contestant2Id || c2?.id || null,
+            person1,
+            person2,
+            person1Name: person1,
+            person2Name: person2,
+            matchedAt: now,
+        };
+    });
+
+    const analysis = {
+        ...result,
+        contestants,
+        couples,
+    };
 
     await Promise.all([
-        // 1. Analysis metadata
-        db.collection('analyses').doc(result.id).set(result),
+        deleteEpisodeScopedDocs('contestants', episodeId),
+        deleteEpisodeScopedDocs('couples', episodeId),
+    ]);
 
-        // 2. Raw transcript
-        db.collection('transcripts').doc(result.id).set({
-            content: transcript,
-            episodeTitle: result.episodeTitle,
-            episodeNumber: result.episodeNumber,
-            videoUrl: result.videoUrl,
-            analysisId: result.id,
-            createdAt: now,
-        }),
-
-        // 3. Contestants (normalized)
-        ...result.contestants.map((contestant: any) =>
-            db.collection('contestants').doc(contestant.id).set({
-                ...contestant,
-                episodeId: result.id,
-                episodeNumber: result.episodeNumber || null,
-                episodeTitle: result.episodeTitle || '',
-                analyzedAt: now,
-            })
+    const writes: Promise<unknown>[] = [
+        db.collection('analyses').doc(episodeId).set(analysis),
+        ...contestants.map((contestant: any) =>
+            db.collection('contestants').doc(contestant.id).set(contestant)
         ),
-
-        // 4. Couples (normalized)
-        ...result.couples.map((couple: any) =>
-            db.collection('couples').doc(db.collection('_').doc().id).set({
-                episodeId: result.id,
-                episodeNumber: result.episodeNumber || null,
-                episodeTitle: result.episodeTitle || '',
+        ...couples.map((couple: any) =>
+            db.collection('couples').doc(couple.id).set({
+                episodeId: couple.episodeId,
+                episodeNumber: couple.episodeNumber,
+                episodeTitle: couple.episodeTitle,
                 contestant1Id: couple.contestant1Id,
                 contestant2Id: couple.contestant2Id,
-                person1Name: couple.person1,
-                person2Name: couple.person2,
-                matchedAt: now,
+                person1: couple.person1,
+                person2: couple.person2,
+                person1Name: couple.person1Name,
+                person2Name: couple.person2Name,
+                matchedAt: couple.matchedAt,
             })
         ),
-    ]);
+    ];
+
+    if (typeof transcript === 'string') {
+        writes.push(db.collection('transcripts').doc(episodeId).set({
+            content: transcript,
+            episodeTitle: analysis.episodeTitle,
+            episodeNumber: analysis.episodeNumber,
+            videoUrl: analysis.videoUrl,
+            analysisId: episodeId,
+            createdAt: now,
+        }));
+    }
+
+    await Promise.all(writes);
 }
 
 // ---------------------------------------------------------------------------
@@ -397,6 +600,20 @@ export async function runIngest(): Promise<IngestResult> {
 
             // 6. Save to Firestore
             await saveToFirestore(analysisResult, transcript);
+
+            // 6.5. Fetch comments + analyze sentiment (non-blocking)
+            try {
+                const comments = await fetchComments(video.videoId, 100);
+                if (comments.length > 0) {
+                    const sentiment = await analyzeCommentSentiment(comments, episodeNumber);
+                    await saveCommentSentiment(episodeId, episodeNumber, video.videoId, comments, sentiment);
+                    console.log(`[INGEST] Comment sentiment saved for ep ${episodeNumber}: ${sentiment.overallSentiment}`);
+                } else {
+                    console.log(`[INGEST] Comments disabled or empty for ep ${episodeNumber}`);
+                }
+            } catch (sentimentErr: any) {
+                console.warn(`[INGEST] Comment sentiment failed for ep ${episodeNumber}: ${sentimentErr.message}`);
+            }
 
             // 7. Mark as processed (idempotency guard)
             await db.collection('processed_episodes').doc(video.videoId).set({

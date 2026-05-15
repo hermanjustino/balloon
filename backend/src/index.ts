@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import * as admin from 'firebase-admin';
 import { BigQuery } from '@google-cloud/bigquery';
-import { runIngest, analyzeTranscript } from './ingest';
+import { runIngest, analyzeTranscript, fetchComments, analyzeCommentSentiment, saveCommentSentiment, saveToFirestore } from './ingest';
 import { GoogleGenAI, Type } from '@google/genai';
 import {
     getOutcomes,
@@ -33,10 +33,12 @@ const authenticate = async (req: express.Request, res: express.Response, next: e
     if (
         req.path === '/health' ||
         req.path.startsWith('/api/stats') ||
+        (req.method === 'GET' && req.path.startsWith('/api/sentiment')) ||
         req.path.startsWith('/api/contestants') ||
         req.path.startsWith('/contestants') ||
         req.path.startsWith('/api/episodes') ||
         req.path.startsWith('/episodes') ||
+        req.path === '/api/search' ||
         req.path === '/ingest/run'
     ) return next();
 
@@ -267,6 +269,7 @@ app.get('/api/stats/drama', async (req, res) => {
 
 // 13. Age Match Rates
 app.get('/api/stats/age-match', async (req, res) => {
+
     try {
         res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
         const rows = await getAgeMatchRate();
@@ -282,6 +285,78 @@ app.get('/api/stats/age-match', async (req, res) => {
     }
 });
 
+// 14. Comment Sentiment — public
+app.get('/api/sentiment', async (_req, res) => {
+    try {
+        const db = admin.firestore();
+        const snap = await db.collection('episode_sentiment').get();
+        const rows = snap.docs
+            .map(d => {
+                const data = d.data() as any;
+                return {
+                    episodeId:               data.episodeId,
+                    episodeNumber:           data.episodeNumber,
+                    overallSentiment:        data.overallSentiment,
+                    sentimentScore:          data.sentimentScore,
+                    positivePercent:         data.positivePercent,
+                    negativePercent:         data.negativePercent,
+                    neutralPercent:          data.neutralPercent,
+                    humorPercent:            data.humorPercent,
+                    topThemes:               data.topThemes,
+                    audienceSummary:         data.audienceSummary,
+                    topPraises:              data.topPraises,
+                    topCritiques:            data.topCritiques,
+                    mostDiscussedContestant: data.mostDiscussedContestant,
+                    sampleSize:              data.sampleSize,
+                    analyzedAt:              data.analyzedAt,
+                };
+            })
+            .sort((a, b) => Number(a.episodeNumber) - Number(b.episodeNumber));
+        res.json(rows);
+    } catch (e: any) {
+        console.error('[SENTIMENT] List error:', e.message);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/api/sentiment/:episodeId', async (req, res) => {
+    try {
+        const db = admin.firestore();
+        const epId = `ep_${req.params.episodeId}`;
+        const snap = await db.collection('episode_sentiment').doc(epId).get();
+        if (!snap.exists) return res.status(404).json({ error: 'Not found' });
+        res.json(snap.data());
+    } catch (e: any) {
+        console.error('[SENTIMENT] Detail error:', e.message);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// 15. On-demand sentiment trigger (admin only)
+app.post('/api/sentiment/:episodeId/analyze', async (req, res) => {
+    try {
+        const db = admin.firestore();
+        const epId = `ep_${req.params.episodeId}`;
+        const processedSnap = await db.collection('processed_episodes')
+            .where('episodeId', '==', epId)
+            .limit(1)
+            .get();
+
+        if (processedSnap.empty) return res.status(404).json({ error: 'Episode not found in processed_episodes' });
+
+        const { videoId, episodeNumber } = processedSnap.docs[0].data() as any;
+        const comments = await fetchComments(videoId, 100);
+        if (comments.length === 0) return res.json({ message: 'No comments available' });
+
+        const sentiment = await analyzeCommentSentiment(comments, episodeNumber);
+        await saveCommentSentiment(epId, episodeNumber, videoId, comments, sentiment);
+        res.json({ episodeId: epId, ...sentiment });
+    } catch (e: any) {
+        console.error('[SENTIMENT] Analyze error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Analyze transcript — admin only, key never leaves server
 app.post('/api/analyze', async (req, res) => {
     const { transcript, episodeNumber, videoUrl } = req.body;
@@ -293,6 +368,21 @@ app.post('/api/analyze', async (req, res) => {
         res.json(result);
     } catch (err: any) {
         console.error('[ANALYZE] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Save analysis — admin only. Browser clients call this instead of writing
+// normalized collections directly through the Firebase SDK.
+app.post('/api/save', async (req, res) => {
+    const { result, transcript } = req.body;
+    if (!result?.id) return res.status(400).json({ error: 'result.id is required' });
+
+    try {
+        await saveToFirestore(result, transcript);
+        res.json({ status: 'saved', episodeId: result.id });
+    } catch (err: any) {
+        console.error('[SAVE] Error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
@@ -609,6 +699,117 @@ app.get('/episodes/:id', async (req, res) => {
     } catch (e: any) {
         console.error('[EPISODES-OG] Error:', e.message);
         res.status(500).send('<html><body>Error loading episode.</body></html>');
+    }
+});
+
+// ---------------------------------------------------------------------------
+// CONVERSATIONAL SEARCH
+// Gathers all aggregate data + contestant/episode context, sends to Gemini,
+// returns a natural-language answer. Gemini key stays server-side.
+// ---------------------------------------------------------------------------
+app.post('/api/search', async (req, res) => {
+    const { query } = req.body;
+    if (!query?.trim()) return res.status(400).json({ error: 'query is required' });
+
+    try {
+        const db = admin.firestore();
+
+        const [
+            overviewRows,
+            outcomes,
+            locationRows,
+            religion,
+            ageGaps,
+            geoMatches,
+            bestEpisodes,
+            industries,
+            dealbreakers,
+            dramaScores,
+            ageMatchRates,
+            kidsStats,
+            contestantsSnap,
+            analysesSnap,
+        ] = await Promise.all([
+            bigquery.query({ query: `SELECT episodesAnalyzed, overallMatchRate, avgAge, totalParticipants, malePercentage, femalePercentage FROM \`${PROJECT_ID}.balloon_dataset.aggregated_metrics\` ORDER BY lastUpdated DESC LIMIT 1` }).then(([r]) => r),
+            getOutcomes(),
+            bigquery.query({ query: `SELECT location, count FROM \`${PROJECT_ID}.balloon_dataset.aggregated_locations\` ORDER BY count DESC LIMIT 30` }).then(([r]) => r),
+            getReligionBreakdown(),
+            getAgeGaps(),
+            getGeoMatches(),
+            getBestEpisodes(),
+            getIndustries(),
+            getDealbreakers(),
+            getDramaScores(),
+            getAgeMatchRate(),
+            getKidsStats(),
+            db.collection('contestants').get(),
+            db.collection('analyses').get(),
+        ]);
+
+        const contestants = contestantsSnap.docs.map(d => {
+            const data = d.data() as any;
+            const loc = typeof data.location === 'object' && data.location
+                ? [data.location.city, data.location.state].filter(Boolean).join(', ')
+                : (data.location || '');
+            return {
+                name: data.name,
+                age: data.age,
+                location: loc,
+                job: data.jobs?.[0] || data.job || '',
+                outcome: data.outcome,
+                episode: (data.episodeId as string)?.replace('ep_', '') || '',
+            };
+        });
+
+        const episodes = analysesSnap.docs.map(d => {
+            const data = d.data() as any;
+            const epNum = data.episodeNumber || (d.id.startsWith('ep_') ? d.id.replace('ep_', '') : null);
+            if (!epNum || isNaN(Number(epNum))) return null;
+            return {
+                episode: epNum,
+                title: data.episodeTitle || null,
+                matchRate: data.matchRate != null ? Number(data.matchRate) : null,
+                dramaScore: data.dramaScore != null ? Number(data.dramaScore) : null,
+                memorableMoment: data.memorableMoment || null,
+            };
+        }).filter(Boolean).sort((a: any, b: any) => Number(a.episode) - Number(b.episode));
+
+        const context = {
+            overview: overviewRows[0],
+            topLocations: locationRows,
+            outcomes: outcomes.map(r => ({ role: r.role, outcome: r.outcome, count: Number(r.count) })),
+            religion: religion.map(r => ({ religion: r.religion, count: Number(r.count) })),
+            ageGaps: ageGaps.map(r => ({ range: r.age_range, count: Number(r.count) })),
+            geoMatches,
+            bestEpisodes: bestEpisodes.map(r => ({ episode: r.episode_number, title: r.episode_title, matchRate: r.match_rate != null ? Number(r.match_rate) : null, dramaScore: r.drama_score != null ? Number(r.drama_score) : null })),
+            industries: industries.map(r => ({ industry: r.industry, total: Number(r.total), matched: Number(r.matched), matchRate: r.match_rate != null ? Number(r.match_rate) : null })),
+            dealbreakers: dealbreakers.map(r => ({ category: r.category, reason: r.reason, count: Number(r.count) })),
+            dramaScores: dramaScores.map(r => ({ episode: r.episode_number, title: r.episode_title, dramaScore: r.drama_score != null ? Number(r.drama_score) : null, memorableMoment: r.memorable_moment })),
+            ageMatchRates: ageMatchRates.map(r => ({ age: Number(r.age), total: Number(r.total), matched: Number(r.matched), matchRate: r.match_rate != null ? Number(r.match_rate) : null })),
+            kidsStats,
+            contestants,
+            episodes,
+        };
+
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+        const prompt = `You are a data analyst for "Pop the Balloon", a Canadian dating show. Answer the question below using only the data provided. Be concise and direct. Format numbers clearly (percentages, counts). If the data doesn't contain the answer, say so honestly.
+
+DATA:
+${JSON.stringify(context)}
+
+QUESTION: ${query}
+
+ANSWER:`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: prompt,
+        });
+
+        res.json({ answer: response.text });
+    } catch (e: any) {
+        console.error('[SEARCH] Error:', e.message);
+        res.status(500).json({ error: 'Search failed' });
     }
 });
 

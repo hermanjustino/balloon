@@ -96,13 +96,13 @@ export const MigrationTools = () => {
                     // Re-analyze
                     const result = await AIService.analyzeTranscript(transcript, ep.episodeNumber, ep.videoUrl);
 
-                    // Preserve original date but new result (stable ID is now handled by AIService)
+                    // Preserve original date; canonical IDs are enforced by the backend save.
                     const updatedResult: AnalysisResult = {
                         ...result,
                         dateAnalyzed: ep.dateAnalyzed || result.dateAnalyzed || new Date().toISOString().split('T')[0]
                     };
 
-                    await StorageService.fullySaveAnalysis(updatedResult);
+                    await StorageService.fullySaveAnalysis(updatedResult, transcript);
                     updatedCount++;
 
                 } catch (epError) {
@@ -237,4 +237,3 @@ export const MigrationTools = () => {
         </div>
     );
 };
-
