@@ -1,19 +1,20 @@
-# Pop the Balloon Data Science
+# Balloon Data Science
 
-## See the stats from your favourites
+An analytical dashboard exploring demographic and behavioral trends from popular reality dating shows, powered by real-time data ingestion and AI-driven insights.
 
-### Question Guide
+## Access the Dashboard
+[Visit the live dashboard](https://balloon-87473.web.app)
 
-What is the match rate by state/city?
-Do people with kids match more or less often?
-Which job categories correlate with success?
-Is there an age range "sweet spot" for matching?
-Does religion/spirituality affect outcomes?
+## Analytical Insights
+The dashboard provides deep dives into:
+* **Geospatial Match Rates:** Breakdown of outcomes by location.
+* **Demographic Correlation:** How age, religion, and family status influence relationship success.
+* **Career Impact:** Correlating professional backgrounds with show outcomes.
+* **Trend Analysis:** AI-assisted sentiment and drama score tracking across episodes.
 
 ## Run Locally
 
 **Prerequisites:**  Node.js
-
 
 1. Install dependencies:
    `npm install`
