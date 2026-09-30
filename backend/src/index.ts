@@ -406,7 +406,7 @@ Return JSON array with objects: { original, city, state, country }`;
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-3.8-flash',
             contents: prompt,
             config: {
                 responseMimeType: 'application/json',
@@ -802,7 +802,7 @@ QUESTION: ${query}
 ANSWER:`;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-3.8-flash',
             contents: prompt,
         });
 

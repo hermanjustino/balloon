@@ -238,7 +238,7 @@ export async function analyzeCommentSentiment(
     };
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-3.8-flash',
         contents: `Analyze the audience comments below from Episode ${episodeNumber} of the YouTube dating show "Pop the Balloon". Comments are sorted by relevance (most liked first) with their like count in brackets.
 
 Assess the overall sentiment, what topics dominated the discussion, and what specific things viewers praised or criticized.
